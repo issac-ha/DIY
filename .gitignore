@@ -15,13 +15,25 @@ chroma_db/
 long_term_memory.json
 logs/
 
+# B站视频采集产物
+snapshots/
+reports/
+audio/
+_snapshots/
+cookies/
+
+# 浏览器用户数据与运行时缓存（体积大，可能含登录态）
+.chrome-cdp/
+.playwright-browsers/
+
 # IDE
 .vscode/
 .idea/
 
-# 学习练习文件（不属于项目）
+# 学习练习文件与临时验证脚本（不属于项目）
 learn_*.py
 test_*.py
+_verify_*.py
 
 # 系统
 .DS_Store
