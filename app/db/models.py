@@ -1,6 +1,6 @@
 """数据库模型：硬件产品与价格历史"""
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, UniqueConstraint
 from sqlalchemy.orm import relationship
 from app.db.database import Base
 
@@ -15,6 +15,12 @@ class Product(Base):
     brand = Column(String(50))                                      # 品牌
     specs = Column(String(500))                                     # 核心规格，文字描述
     current_price = Column(Float)                                   # 当前价格
+    platform = Column(String(20), nullable=False, default='taobao')    # 平台来源：taobao/pdd/jd
+
+    # 联合唯一：同一平台的同一产品只存一条
+    __table_args__ = (
+        UniqueConstraint('name', 'platform', name='uq_name_platform'),
+    )
 
     price_history = relationship("PriceHistory", back_populates="product", cascade="all, delete-orphan")
 
@@ -27,5 +33,6 @@ class PriceHistory(Base):
     product_id = Column(Integer, ForeignKey("products.id"), nullable=False, index=True)
     price = Column(Float, nullable=False)
     date = Column(DateTime, nullable=False, default=datetime.now)
+    platform = Column(String(20), nullable=False)                   # 平台来源
 
     product = relationship("Product", back_populates="price_history")

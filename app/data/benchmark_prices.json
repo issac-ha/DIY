@@ -1,0 +1,136 @@
+{
+  "date": "2026-01-01",
+  "data_date": "2025-11-17",
+  "description": "11月17日显卡价格基准表。价格单位：元。prices 中 0 表示无货/未采集。",
+  "note": "基准应使用 2026-01-01 的实际行情价格。当前数值来自 11-17 价格表，仅用于跑通采集与异常检测流程，拿到 1月1日价格后替换本文件即可。",
+  "products": {
+    "RTX 5090 D": {
+      "brand": "微星/龙神",
+      "tse_score": 25485,
+      "historical_low": 17995,
+      "daily_low": 42999,
+      "original_price": 16499,
+      "prices": {"jd": 0, "taobao": 44499, "pdd": 42999, "douyin": 52000}
+    },
+    "RTX 5090D V2": {
+      "brand": "索泰/Solid",
+      "tse_score": 25042,
+      "historical_low": 14498,
+      "daily_low": 29498,
+      "original_price": 16499,
+      "prices": {"jd": 38580, "taobao": 29998, "pdd": 29498, "douyin": 32999}
+    },
+    "RTX 5080": {
+      "brand": "映众/VX",
+      "tse_score": 16066,
+      "historical_low": 7700,
+      "daily_low": 14200,
+      "original_price": 8299,
+      "prices": {"jd": 15999, "taobao": 15599, "pdd": 14200, "douyin": 14699}
+    },
+    "RTX 5070 Ti": {
+      "brand": "耕升/追风",
+      "tse_score": 13485,
+      "historical_low": 5733,
+      "daily_low": 10200,
+      "original_price": 6299,
+      "prices": {"jd": 11489, "taobao": 10988, "pdd": 10200, "douyin": 10699}
+    },
+    "RTX 5070": {
+      "brand": "微星/万图",
+      "tse_score": 10096,
+      "historical_low": 3958,
+      "daily_low": 6899,
+      "original_price": 4599,
+      "prices": {"jd": 7989, "taobao": 7055, "pdd": 6899, "douyin": 7499}
+    },
+    "RTX 5060 Ti 8GB": {
+      "brand": "耕升/追风",
+      "tse_score": 7136,
+      "historical_low": 2528,
+      "daily_low": 3899,
+      "original_price": 3199,
+      "prices": {"jd": 4089, "taobao": 3899, "pdd": 3929, "douyin": 3999}
+    },
+    "RTX 5060 Ti 16G": {
+      "brand": "盈通/大地",
+      "tse_score": 7136,
+      "historical_low": 2878,
+      "daily_low": 5699,
+      "original_price": 3599,
+      "prices": {"jd": 6589, "taobao": 5799, "pdd": 5987, "douyin": 5699}
+    },
+    "RTX 5060": {
+      "brand": "万丽/星云",
+      "tse_score": 6529,
+      "historical_low": 2099,
+      "daily_low": 3380,
+      "original_price": 2499,
+      "prices": {"jd": 3689, "taobao": 3499, "pdd": 3380, "douyin": 3499}
+    },
+    "RTX 5050": {
+      "brand": "昂达/神盾",
+      "tse_score": 4607,
+      "historical_low": 1603,
+      "daily_low": 2599,
+      "original_price": 2099,
+      "prices": {"jd": 3189, "taobao": 2749, "pdd": 2599, "douyin": 2799}
+    },
+    "RX 9070 XT": {
+      "brand": "XFX/黑狼",
+      "tse_score": 14120,
+      "historical_low": 3848,
+      "daily_low": 6049,
+      "original_price": 4999,
+      "prices": {"jd": 6989, "taobao": 6199, "pdd": 6049, "douyin": 6555}
+    },
+    "RX 9070": {
+      "brand": "瀚铠/合金",
+      "tse_score": 12860,
+      "historical_low": 3551,
+      "daily_low": 5198,
+      "original_price": 4499,
+      "prices": {"jd": 5289, "taobao": 5199, "pdd": 5198, "douyin": 5499}
+    },
+    "RX 9070 GRE": {
+      "brand": "瀚铠/合金",
+      "tse_score": 10686,
+      "historical_low": 2899,
+      "daily_low": 4058,
+      "original_price": 4199,
+      "prices": {"jd": 4589, "taobao": 4199, "pdd": 4058, "douyin": 4299}
+    },
+    "RX 9060 XT 16GB": {
+      "brand": "瀚铠/合金",
+      "tse_score": 7489,
+      "historical_low": 2195,
+      "daily_low": 3694,
+      "original_price": 2899,
+      "prices": {"jd": 4889, "taobao": 3989, "pdd": 3694, "douyin": 3999}
+    },
+    "RX 9060 XT 8GB": {
+      "brand": "瀚铠/合金",
+      "tse_score": 7234,
+      "historical_low": 1749,
+      "daily_low": 2849,
+      "original_price": 2499,
+      "prices": {"jd": 3499, "taobao": 2899, "pdd": 2849, "douyin": 2999}
+    },
+    "ARC B580": {
+      "brand": "铭瑄/电竞",
+      "tse_score": 7113,
+      "historical_low": 1505,
+      "daily_low": 2699,
+      "original_price": 2049,
+      "prices": {"jd": 2999, "taobao": 2899, "pdd": 2799, "douyin": 2699}
+    },
+    "ARC B570": {
+      "brand": "撼与/泰坦",
+      "tse_score": 6001,
+      "historical_low": 1299,
+      "daily_low": 2094,
+      "original_price": 1799,
+      "prices": {"jd": 2199, "taobao": 2094, "pdd": 2094, "douyin": 2399}
+    }
+  }
+}
