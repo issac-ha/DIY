@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>聊天演示</title>
+  <style>
+    #chat { height: 300px; border: 1px solid #ccc; padding: 10px; overflow-y: auto; }
+    .message { margin: 5px 0; padding: 8px; border-radius: 8px; max-width: 70%; }
+    .user { background: #e3f2fd; margin-left: auto; text-align: right; }
+    .bot { background: #f5f5f5; }
+  </style>
+</head>
+<body>
+  <div id="chat"></div>
+  <input id="input" placeholder="输入消息" />
+  <button onclick="send()">发送</button>
+
+  <script>
+    const chat = document.getElementById("chat");
+    const input = document.getElementById("input");
+
+    // 添加消息气泡到页面（DOM 操作）
+    function addMessage(text, isUser) {
+      const div = document.createElement("div");
+      div.className = "message " + (isUser ? "user" : "bot");
+      div.textContent = text;
+      chat.appendChild(div);
+      chat.scrollTop = chat.scrollHeight;  // 自动滚动到底部
+    }
+
+    // 发送消息（async/await + fetch）
+    async function send() {
+      const text = input.value.trim();
+      if (!text) return;
+
+      // 1. 显示用户消息
+      addMessage(text, true);
+      input.value = "";
+
+      try {
+        // 2. 调用后端接口（fetch + JSON 序列化）
+        const response = await fetch("http://localhost:8000/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message: text })  // 序列化
+        });
+
+        // 3. 解析返回数据（JSON 反序列化，fetch 内部已 parse）
+        const data = await response.json();
+
+        // 4. 显示后端回答
+        addMessage(data.reply, false);
+
+      } catch (error) {
+        addMessage("出错了：" + error.message, false);
+      }
+    }
+
+    // 按回车发送
+    input.addEventListener("keypress", (e) => {
+      if (e.key === "Enter") send();
+    });
+  </script>
+</body>
+</html>

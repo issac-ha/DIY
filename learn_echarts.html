@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>ECharts 教程</title>
+  <!-- 引入 ECharts -->
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+  <style>
+    .chart-box { width: 600px; height: 400px; margin: 20px 0; border: 1px solid #eee; }
+    button { padding: 8px 16px; margin-right: 10px; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <h2>ECharts 教程 - 点击切换图表类型</h2>
+  <button onclick="showLine()">折线图</button>
+  <button onclick="showBar()">柱状图</button>
+  <button onclick="showPie()">饼图</button>
+  <button onclick="showMulti()">双折线对比</button>
+  <div id="chart" class="chart-box"></div>
+
+  <script>
+    // 初始化图表实例（只初始化一次）
+    var chart = echarts.init(document.getElementById("chart"));
+
+    // 折线图：价格趋势
+    function showLine() {
+      chart.setOption({
+        title: { text: "RTX 4060 价格趋势" },
+        tooltip: { trigger: "axis" },
+        xAxis: { type: "category", data: ["11-01", "11-02", "11-03", "11-04", "11-05", "11-06", "11-07"] },
+        yAxis: { type: "value", name: "价格(元)" },
+        series: [{
+          type: "line",
+          data: [2399, 2450, 2380, 2300, 2350, 2290, 2320],
+          smooth: true,
+          areaStyle: {}
+        }]
+      });
+    }
+
+    // 柱状图：产品对比
+    function showBar() {
+      chart.setOption({
+        title: { text: "显卡价格对比" },
+        tooltip: { trigger: "axis" },
+        xAxis: { type: "category", data: ["RTX 4060", "RTX 4070", "RTX 5070", "RTX 5080"] },
+        yAxis: { type: "value", name: "价格(元)" },
+        series: [{
+          type: "bar",
+          data: [2399, 4299, 4599, 8299],
+          itemStyle: { color: "#5470c6" }
+        }]
+      });
+    }
+
+    // 饼图：市场占比
+    function showPie() {
+      chart.setOption({
+        title: { text: "显卡品牌占比" },
+        tooltip: { trigger: "item" },
+        series: [{
+          type: "pie",
+          radius: "60%",
+          data: [
+            { value: 55, name: "NVIDIA" },
+            { value: 30, name: "AMD" },
+            { value: 15, name: "Intel" }
+          ]
+        }]
+      });
+    }
+
+    // 双折线：对比两个产品
+    function showMulti() {
+      chart.setOption({
+        title: { text: "RTX 4060 vs RTX 4070 价格对比" },
+        tooltip: { trigger: "axis" },
+        legend: { data: ["RTX 4060", "RTX 4070"] },
+        xAxis: { type: "category", data: ["周一", "周二", "周三", "周四", "周五"] },
+        yAxis: { type: "value", name: "价格(元)" },
+        series: [
+          { name: "RTX 4060", type: "line", data: [2399, 2450, 2380, 2300, 2350] },
+          { name: "RTX 4070", type: "line", data: [4299, 4350, 4200, 4150, 4180] }
+        ]
+      });
+    }
+
+    // 默认显示折线图
+    showLine();
+  </script>
+</body>
+</html>
