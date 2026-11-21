@@ -1,136 +1,917 @@
 {
-  "date": "2026-01-01",
-  "data_date": "2025-11-17",
-  "description": "11月17日显卡价格基准表。价格单位：元。prices 中 0 表示无货/未采集。",
-  "note": "基准应使用 2026-01-01 的实际行情价格。当前数值来自 11-17 价格表，仅用于跑通采集与异常检测流程，拿到 1月1日价格后替换本文件即可。",
+  "date": "2026-05-01",
+  "data_date": "2026-05-01",
+  "description": "2026-05-01 行情价格基准表。价格单位：元。顶层 products 是全新价；used_products 是闲鱼二手成交价。由当日显卡日报视频截图提取，后续异常检测以这一期为参照。",
+  "note": "基准取自 2026-05-01 的视频（北美数据中心缺电缺电工：40%面临延期｜显卡日报5月2日）。",
   "products": {
     "RTX 5090 D": {
+      "category": "gpu",
       "brand": "微星/龙神",
       "tse_score": 25485,
       "historical_low": 17995,
-      "daily_low": 42999,
+      "daily_low": 25499.0,
       "original_price": 16499,
-      "prices": {"jd": 0, "taobao": 44499, "pdd": 42999, "douyin": 52000}
+      "prices": {
+        "jd": 29999.0,
+        "taobao": 25999.0,
+        "pdd": 25499.0,
+        "douyin": 25599.0
+      }
     },
     "RTX 5090D V2": {
+      "category": "gpu",
       "brand": "索泰/Solid",
       "tse_score": 25042,
       "historical_low": 14498,
-      "daily_low": 29498,
+      "daily_low": 16850.0,
       "original_price": 16499,
-      "prices": {"jd": 38580, "taobao": 29998, "pdd": 29498, "douyin": 32999}
+      "prices": {
+        "jd": 18899.0,
+        "taobao": 16899.0,
+        "pdd": 16850.0,
+        "douyin": 16999.0
+      }
     },
     "RTX 5080": {
+      "category": "gpu",
       "brand": "映众/VX",
       "tse_score": 16066,
       "historical_low": 7700,
-      "daily_low": 14200,
+      "daily_low": 8599.0,
       "original_price": 8299,
-      "prices": {"jd": 15999, "taobao": 15599, "pdd": 14200, "douyin": 14699}
+      "prices": {
+        "jd": 9199.0,
+        "taobao": 8599.0,
+        "pdd": 8648.0,
+        "douyin": 8799.0
+      }
     },
     "RTX 5070 Ti": {
+      "category": "gpu",
       "brand": "耕升/追风",
       "tse_score": 13485,
       "historical_low": 5733,
-      "daily_low": 10200,
+      "daily_low": 6745.0,
       "original_price": 6299,
-      "prices": {"jd": 11489, "taobao": 10988, "pdd": 10200, "douyin": 10699}
+      "prices": {
+        "jd": 7459.0,
+        "taobao": 6999.0,
+        "pdd": 6778.0,
+        "douyin": 6745.0
+      }
     },
     "RTX 5070": {
+      "category": "gpu",
       "brand": "微星/万图",
       "tse_score": 10096,
       "historical_low": 3958,
-      "daily_low": 6899,
+      "daily_low": 4405.0,
       "original_price": 4599,
-      "prices": {"jd": 7989, "taobao": 7055, "pdd": 6899, "douyin": 7499}
+      "prices": {
+        "jd": 4999.0,
+        "taobao": 4699.0,
+        "pdd": 4405.0,
+        "douyin": 4700.0
+      }
     },
     "RTX 5060 Ti 8GB": {
+      "category": "gpu",
       "brand": "耕升/追风",
       "tse_score": 7136,
       "historical_low": 2528,
-      "daily_low": 3899,
+      "daily_low": 2620.0,
       "original_price": 3199,
-      "prices": {"jd": 4089, "taobao": 3899, "pdd": 3929, "douyin": 3999}
+      "prices": {
+        "jd": 3049.0,
+        "taobao": 2649.0,
+        "pdd": 2699.0,
+        "douyin": 2620.0
+      }
     },
-    "RTX 5060 Ti 16G": {
+    "RTX 5060 Ti 16GB": {
+      "category": "gpu",
       "brand": "盈通/大地",
       "tse_score": 7136,
       "historical_low": 2878,
-      "daily_low": 5699,
+      "daily_low": 3529.0,
       "original_price": 3599,
-      "prices": {"jd": 6589, "taobao": 5799, "pdd": 5987, "douyin": 5699}
+      "prices": {
+        "jd": 4199.0,
+        "taobao": 3799.0,
+        "pdd": 3529.0,
+        "douyin": 3649.0
+      }
     },
     "RTX 5060": {
+      "category": "gpu",
       "brand": "万丽/星云",
       "tse_score": 6529,
       "historical_low": 2099,
-      "daily_low": 3380,
+      "daily_low": 2299.0,
       "original_price": 2499,
-      "prices": {"jd": 3689, "taobao": 3499, "pdd": 3380, "douyin": 3499}
+      "prices": {
+        "jd": 2564.0,
+        "taobao": 2399.0,
+        "pdd": 2299.0,
+        "douyin": 2300.0
+      }
     },
     "RTX 5050": {
+      "category": "gpu",
       "brand": "昂达/神盾",
       "tse_score": 4607,
       "historical_low": 1603,
-      "daily_low": 2599,
+      "daily_low": 1889.0,
       "original_price": 2099,
-      "prices": {"jd": 3189, "taobao": 2749, "pdd": 2599, "douyin": 2799}
+      "prices": {
+        "jd": 2399.0,
+        "taobao": 1980.0,
+        "pdd": 1889.0,
+        "douyin": 1900.0
+      }
     },
     "RX 9070 XT": {
+      "category": "gpu",
       "brand": "XFX/黑狼",
       "tse_score": 14120,
       "historical_low": 3848,
-      "daily_low": 6049,
+      "daily_low": 4200.0,
       "original_price": 4999,
-      "prices": {"jd": 6989, "taobao": 6199, "pdd": 6049, "douyin": 6555}
+      "prices": {
+        "jd": 4698.0,
+        "taobao": 4200.0,
+        "pdd": 4319.0,
+        "douyin": 4480.0
+      }
     },
     "RX 9070": {
+      "category": "gpu",
       "brand": "瀚铠/合金",
       "tse_score": 12860,
       "historical_low": 3551,
-      "daily_low": 5198,
+      "daily_low": 3999.0,
       "original_price": 4499,
-      "prices": {"jd": 5289, "taobao": 5199, "pdd": 5198, "douyin": 5499}
+      "prices": {
+        "jd": 4319.0,
+        "taobao": 3999.0,
+        "pdd": 4189.0,
+        "douyin": 4189.0
+      }
     },
     "RX 9070 GRE": {
+      "category": "gpu",
       "brand": "瀚铠/合金",
       "tse_score": 10686,
       "historical_low": 2899,
-      "daily_low": 4058,
+      "daily_low": 3268.0,
       "original_price": 4199,
-      "prices": {"jd": 4589, "taobao": 4199, "pdd": 4058, "douyin": 4299}
+      "prices": {
+        "jd": 3409.0,
+        "taobao": 3395.0,
+        "pdd": 3268.0,
+        "douyin": 3499.0
+      }
     },
     "RX 9060 XT 16GB": {
+      "category": "gpu",
       "brand": "瀚铠/合金",
       "tse_score": 7489,
       "historical_low": 2195,
-      "daily_low": 3694,
+      "daily_low": 2595.0,
       "original_price": 2899,
-      "prices": {"jd": 4889, "taobao": 3989, "pdd": 3694, "douyin": 3999}
+      "prices": {
+        "jd": 3239.0,
+        "taobao": 2699.0,
+        "pdd": 2595.0,
+        "douyin": 2599.0
+      }
     },
     "RX 9060 XT 8GB": {
+      "category": "gpu",
       "brand": "瀚铠/合金",
       "tse_score": 7234,
       "historical_low": 1749,
-      "daily_low": 2849,
+      "daily_low": 2089.0,
       "original_price": 2499,
-      "prices": {"jd": 3499, "taobao": 2899, "pdd": 2849, "douyin": 2999}
+      "prices": {
+        "jd": 2298.0,
+        "taobao": 2199.0,
+        "pdd": 2089.0,
+        "douyin": 2199.0
+      }
     },
     "ARC B580": {
+      "category": "gpu",
       "brand": "铭瑄/电竞",
       "tse_score": 7113,
       "historical_low": 1505,
-      "daily_low": 2699,
+      "daily_low": 1929.0,
       "original_price": 2049,
-      "prices": {"jd": 2999, "taobao": 2899, "pdd": 2799, "douyin": 2699}
+      "prices": {
+        "taobao": 2119.0,
+        "pdd": 1929.0,
+        "douyin": 1935.0
+      }
     },
     "ARC B570": {
+      "category": "gpu",
       "brand": "撼与/泰坦",
       "tse_score": 6001,
       "historical_low": 1299,
-      "daily_low": 2094,
+      "daily_low": 1484.0,
       "original_price": 1799,
-      "prices": {"jd": 2199, "taobao": 2094, "pdd": 2094, "douyin": 2399}
+      "prices": {
+        "jd": 1549.0,
+        "taobao": 1598.0,
+        "pdd": 1484.0,
+        "douyin": 1598.0
+      }
+    },
+    "DDR4 8GB*2": {
+      "category": "memory",
+      "brand": "金士顿",
+      "per_gb": 30.19,
+      "original_price": 180,
+      "daily_low": 418.0,
+      "lowest_shop": "某宝/存储硬盘芯片",
+      "lowest_model": "金士顿/普",
+      "prices": {
+        "taobao": 445.0,
+        "pdd": 429.0,
+        "douyin": 418.0
+      }
+    },
+    "DDR4 16GB*2": {
+      "category": "memory",
+      "brand": "航易",
+      "per_gb": 28.75,
+      "original_price": 260,
+      "daily_low": 840.0,
+      "lowest_shop": "某多/ORX航易存储",
+      "lowest_model": "航易/黑",
+      "prices": {
+        "taobao": 840.0,
+        "pdd": 944.0,
+        "douyin": 1059.0
+      }
+    },
+    "DDR5 16GB*2": {
+      "category": "memory",
+      "brand": "赛帝曼克",
+      "per_gb": 61.69,
+      "original_price": 480,
+      "daily_low": 1751.0,
+      "lowest_shop": "某音/赛帝曼克Stmag",
+      "lowest_model": "赛帝曼克/白",
+      "prices": {
+        "taobao": 1980.0,
+        "pdd": 1869.0,
+        "douyin": 1751.0
+      }
+    },
+    "DDR5 24GB*2": {
+      "category": "memory",
+      "brand": "威刚",
+      "per_gb": 77.02,
+      "original_price": 840,
+      "daily_low": 2699.0,
+      "lowest_shop": "某宝/威刚旗舰店",
+      "lowest_model": "威刚/黑",
+      "prices": {
+        "taobao": 2699.0,
+        "pdd": 2699.0,
+        "douyin": 2799.0
+      }
+    },
+    "DDR5 32GB*2": {
+      "category": "memory",
+      "brand": "挚科",
+      "per_gb": 71.16,
+      "original_price": 1100,
+      "daily_low": 4198.0,
+      "lowest_shop": "某宝/挚科旗舰店",
+      "lowest_model": "挚科/黑",
+      "prices": {
+        "taobao": 4198.0,
+        "pdd": 4199.0,
+        "douyin": 4699.0
+      }
+    },
+    "DDR5 48GB*2": {
+      "category": "memory",
+      "brand": "玖合",
+      "per_gb": 89.99,
+      "original_price": 1800,
+      "daily_low": 5650.0,
+      "lowest_shop": "某多/杰杰数码家电店",
+      "lowest_model": "玖合/黑",
+      "prices": {
+        "taobao": 5650.0,
+        "pdd": 5799.0,
+        "douyin": 5800.0
+      }
+    },
+    "PCIe 3.0 1TB": {
+      "category": "ssd",
+      "brand": "闪迪",
+      "per_gb": 0.78,
+      "original_price": 320,
+      "daily_low": 799.0,
+      "lowest_shop": "某宝/北京闽东时代",
+      "lowest_model": "闪迪/PLUS",
+      "prices": {
+        "taobao": 859.0,
+        "pdd": 799.0,
+        "douyin": 929.0
+      }
+    },
+    "PCIe 3.0 2TB": {
+      "category": "ssd",
+      "brand": "闪迪",
+      "per_gb": 0.75,
+      "original_price": 600,
+      "daily_low": 1439.0,
+      "lowest_shop": "某宝/天猫国际自营",
+      "lowest_model": "闪迪/PLUS",
+      "prices": {
+        "taobao": 1439.0,
+        "pdd": 1459.0,
+        "douyin": 1449.0
+      }
+    },
+    "PCIe 4.0 1TB": {
+      "category": "ssd",
+      "brand": "闪迪",
+      "per_gb": 0.82,
+      "original_price": 380,
+      "daily_low": 828.0,
+      "lowest_shop": "某宝/禾盈数码专营店",
+      "lowest_model": "闪迪/SN3000",
+      "prices": {
+        "taobao": 828.0,
+        "pdd": 882.0,
+        "douyin": 949.0
+      }
+    },
+    "PCIe 4.0 2TB": {
+      "category": "ssd",
+      "brand": "闪迪",
+      "per_gb": 0.74,
+      "original_price": 720,
+      "daily_low": 1419.0,
+      "lowest_shop": "某宝/广州DIY装机店",
+      "lowest_model": "闪迪/SN3000",
+      "prices": {
+        "taobao": 1419.0,
+        "pdd": 1449.0,
+        "douyin": 1479.0
+      }
+    },
+    "U7-270K P": {
+      "category": "cpu",
+      "brand": "Intel",
+      "r23_score": 41558,
+      "historical_low": 1829,
+      "daily_low": 2179.0,
+      "prices": {
+        "jd": 2489.0,
+        "taobao": 2179.0,
+        "pdd": 2230.0,
+        "douyin": 2299.0
+      }
+    },
+    "U7-265K/KF": {
+      "category": "cpu",
+      "brand": "Intel",
+      "r23_score": 36309,
+      "historical_low": 1445,
+      "daily_low": 1596.0,
+      "prices": {
+        "jd": 1859.0,
+        "taobao": 1649.0,
+        "pdd": 1608.0,
+        "douyin": 1596.0
+      }
+    },
+    "U5-250K/KF P": {
+      "category": "cpu",
+      "brand": "Intel",
+      "r23_score": 32090,
+      "historical_low": 1199,
+      "daily_low": 1479.0,
+      "prices": {
+        "jd": 1589.0,
+        "taobao": 1479.0,
+        "pdd": 1549.0,
+        "douyin": 1588.0
+      }
+    },
+    "U5-245K/KF": {
+      "category": "cpu",
+      "brand": "Intel",
+      "r23_score": 24935,
+      "historical_low": 892,
+      "daily_low": 1076.0,
+      "prices": {
+        "jd": 1319.0,
+        "taobao": 1145.0,
+        "pdd": 1076.0,
+        "douyin": 1189.0
+      }
+    },
+    "i9-14900K/KF": {
+      "category": "cpu",
+      "brand": "Intel",
+      "r23_score": 38497,
+      "historical_low": 2435,
+      "daily_low": 2825.0,
+      "prices": {
+        "jd": 3649.0,
+        "taobao": 2825.0,
+        "pdd": 2870.0,
+        "douyin": 2919.0
+      }
+    },
+    "i7-14700K/KF": {
+      "category": "cpu",
+      "brand": "Intel",
+      "r23_score": 34805,
+      "historical_low": 1879,
+      "daily_low": 2110.0,
+      "prices": {
+        "jd": 2499.0,
+        "taobao": 2110.0,
+        "pdd": 2155.0,
+        "douyin": 2168.0
+      }
+    },
+    "i5-14600K/KF": {
+      "category": "cpu",
+      "brand": "Intel",
+      "r23_score": 23983,
+      "historical_low": 1045,
+      "daily_low": 1555.0,
+      "prices": {
+        "jd": 1729.0,
+        "taobao": 1555.0,
+        "pdd": 1569.0,
+        "douyin": 1575.0
+      }
+    },
+    "R9-9950X": {
+      "category": "cpu",
+      "brand": "AMD",
+      "r23_score": 42103,
+      "historical_low": 2569,
+      "daily_low": 2799.0,
+      "prices": {
+        "jd": 3619.0,
+        "taobao": 2799.0,
+        "pdd": 2945.0,
+        "douyin": 2891.0
+      }
+    },
+    "R7-9700X": {
+      "category": "cpu",
+      "brand": "AMD",
+      "r23_score": 23190,
+      "historical_low": 1273,
+      "daily_low": 1394.0,
+      "prices": {
+        "jd": 1729.0,
+        "taobao": 1479.0,
+        "pdd": 1394.0,
+        "douyin": 1449.0
+      }
+    },
+    "R5-9600X": {
+      "category": "cpu",
+      "brand": "AMD",
+      "r23_score": 16284,
+      "historical_low": 980,
+      "daily_low": 1083.0,
+      "prices": {
+        "jd": 1349.0,
+        "taobao": 1099.0,
+        "pdd": 1083.0,
+        "douyin": 1100.0
+      }
+    },
+    "R5-9500F": {
+      "category": "cpu",
+      "brand": "AMD",
+      "r23_score": 15884,
+      "historical_low": 749,
+      "daily_low": 899.0,
+      "prices": {
+        "jd": 1299.0,
+        "taobao": 899.0,
+        "pdd": 947.0,
+        "douyin": 989.0
+      }
+    },
+    "R9-9950X3D": {
+      "category": "cpu",
+      "brand": "AMD",
+      "r23_score": 42377,
+      "historical_low": 3650,
+      "daily_low": 3889.0,
+      "prices": {
+        "jd": 4779.0,
+        "taobao": 3999.0,
+        "pdd": 3889.0,
+        "douyin": 4295.0
+      }
+    },
+    "R7-9850X3D": {
+      "category": "cpu",
+      "brand": "AMD",
+      "r23_score": 23200,
+      "historical_low": 2579,
+      "daily_low": 2999.0,
+      "prices": {
+        "jd": 3619.0,
+        "taobao": 3099.0,
+        "pdd": 2999.0,
+        "douyin": 3049.0
+      }
+    },
+    "R7-9800X3D": {
+      "category": "cpu",
+      "brand": "AMD",
+      "r23_score": 23157,
+      "historical_low": 2265,
+      "daily_low": 2669.0,
+      "prices": {
+        "jd": 3179.0,
+        "taobao": 2699.0,
+        "pdd": 2669.0,
+        "douyin": 2795.0
+      }
+    },
+    "R7-7800X3D": {
+      "category": "cpu",
+      "brand": "AMD",
+      "r23_score": 17885,
+      "historical_low": 1589,
+      "daily_low": 1839.0,
+      "prices": {
+        "pdd": 1839.0,
+        "douyin": 1849.0
+      }
+    },
+    "R5-7500F": {
+      "category": "cpu",
+      "brand": "AMD",
+      "r23_score": 13686,
+      "historical_low": 587,
+      "daily_low": 646.0,
+      "prices": {
+        "jd": 809.0,
+        "taobao": 659.0,
+        "pdd": 668.0,
+        "douyin": 646.0
+      }
+    }
+  },
+  "used_products": {
+    "RTX 5090 D": {
+      "category": "gpu",
+      "condition": "used",
+      "tse_score": 25485,
+      "prices": {
+        "xianyu": 32200
+      }
+    },
+    "RTX 5090D V2": {
+      "category": "gpu",
+      "condition": "used",
+      "tse_score": 25042,
+      "prices": {
+        "xianyu": 24200
+      }
+    },
+    "RTX 5080": {
+      "category": "gpu",
+      "condition": "used",
+      "tse_score": 16066,
+      "prices": {
+        "xianyu": 12499
+      }
+    },
+    "RTX 5070 Ti": {
+      "category": "gpu",
+      "condition": "used",
+      "tse_score": 13485,
+      "prices": {
+        "xianyu": 8800
+      }
+    },
+    "RTX 5070": {
+      "category": "gpu",
+      "condition": "used",
+      "tse_score": 10096,
+      "prices": {
+        "xianyu": 6265
+      }
+    },
+    "RTX 5060 Ti 8GB": {
+      "category": "gpu",
+      "condition": "used",
+      "tse_score": 7136,
+      "prices": {
+        "xianyu": 3460
+      }
+    },
+    "RTX 5060 Ti 16GB": {
+      "category": "gpu",
+      "condition": "used",
+      "tse_score": 7136,
+      "prices": {
+        "xianyu": 4740
+      }
+    },
+    "RTX 5060": {
+      "category": "gpu",
+      "condition": "used",
+      "tse_score": 6529,
+      "prices": {
+        "xianyu": 2950
+      }
+    },
+    "RTX 5050": {
+      "category": "gpu",
+      "condition": "used",
+      "tse_score": 4607,
+      "prices": {
+        "xianyu": 2250
+      }
+    },
+    "RX 9070 XT": {
+      "category": "gpu",
+      "condition": "used",
+      "tse_score": 14120,
+      "prices": {
+        "xianyu": 5600
+      }
+    },
+    "RX 9070": {
+      "category": "gpu",
+      "condition": "used",
+      "tse_score": 12860,
+      "prices": {
+        "xianyu": 4669
+      }
+    },
+    "RX 9070 GRE": {
+      "category": "gpu",
+      "condition": "used",
+      "tse_score": 10686,
+      "prices": {
+        "xianyu": 3800
+      }
+    },
+    "RX 9060 XT 16GB": {
+      "category": "gpu",
+      "condition": "used",
+      "tse_score": 7489,
+      "prices": {
+        "xianyu": 3250
+      }
+    },
+    "RTX 4090": {
+      "category": "gpu",
+      "condition": "used",
+      "tse_score": 19481,
+      "prices": {
+        "xianyu": 18100.0
+      },
+      "daily_low": 18100.0
+    },
+    "RTX 4080 S": {
+      "category": "gpu",
+      "condition": "used",
+      "tse_score": 14251,
+      "prices": {
+        "xianyu": 6382.0
+      },
+      "daily_low": 6382.0
+    },
+    "RTX 4080": {
+      "category": "gpu",
+      "condition": "used",
+      "tse_score": 14041,
+      "prices": {
+        "xianyu": 6000.0
+      },
+      "daily_low": 6000.0
+    },
+    "RTX 4070 Ti S": {
+      "category": "gpu",
+      "condition": "used",
+      "tse_score": 11765,
+      "prices": {
+        "xianyu": 4680.0
+      },
+      "daily_low": 4680.0
+    },
+    "RTX 4070 S": {
+      "category": "gpu",
+      "condition": "used",
+      "tse_score": 10138,
+      "prices": {
+        "xianyu": 3400.0
+      },
+      "daily_low": 3400.0
+    },
+    "RTX 4070": {
+      "category": "gpu",
+      "condition": "used",
+      "tse_score": 8368,
+      "prices": {
+        "xianyu": 2950.0
+      },
+      "daily_low": 2950.0
+    },
+    "RTX 4060 Ti 16GB": {
+      "category": "gpu",
+      "condition": "used",
+      "tse_score": 6287,
+      "prices": {
+        "xianyu": 2750.0
+      },
+      "daily_low": 2750.0
+    },
+    "RTX 4060": {
+      "category": "gpu",
+      "condition": "used",
+      "tse_score": 4947,
+      "prices": {
+        "xianyu": 1725.0
+      },
+      "daily_low": 1725.0
+    },
+    "RX 7900 XTX": {
+      "category": "gpu",
+      "condition": "used",
+      "tse_score": 15222,
+      "prices": {
+        "xianyu": 4300.0
+      },
+      "daily_low": 4300.0
+    },
+    "RX 7900 XT": {
+      "category": "gpu",
+      "condition": "used",
+      "tse_score": 13038,
+      "prices": {
+        "xianyu": 3250.0
+      },
+      "daily_low": 3250.0
+    },
+    "RX 7800 XT": {
+      "category": "gpu",
+      "condition": "used",
+      "tse_score": 9432,
+      "prices": {
+        "xianyu": 2396.0
+      },
+      "daily_low": 2396.0
+    },
+    "RX 7700 XT": {
+      "category": "gpu",
+      "condition": "used",
+      "tse_score": 7858,
+      "prices": {
+        "xianyu": 1850.0
+      },
+      "daily_low": 1850.0
+    },
+    "RX 7600": {
+      "category": "gpu",
+      "condition": "used",
+      "tse_score": 5228,
+      "prices": {
+        "xianyu": 1180.0
+      },
+      "daily_low": 1180.0
+    },
+    "RTX 3090": {
+      "category": "gpu",
+      "condition": "used",
+      "tse_score": 10286,
+      "prices": {
+        "xianyu": 5266.0
+      },
+      "daily_low": 5266.0
+    },
+    "RTX 3080 Ti": {
+      "category": "gpu",
+      "condition": "used",
+      "tse_score": 10086,
+      "prices": {
+        "xianyu": 2705.0
+      },
+      "daily_low": 2705.0
+    },
+    "RTX 3080": {
+      "category": "gpu",
+      "condition": "used",
+      "tse_score": 8893,
+      "prices": {
+        "xianyu": 1912.0
+      },
+      "daily_low": 1912.0
+    },
+    "RTX 3070 Ti": {
+      "category": "gpu",
+      "condition": "used",
+      "tse_score": 7403,
+      "prices": {
+        "xianyu": 1664.0
+      },
+      "daily_low": 1664.0
+    },
+    "RTX 3070": {
+      "category": "gpu",
+      "condition": "used",
+      "tse_score": 6786,
+      "prices": {
+        "xianyu": 1460.0
+      },
+      "daily_low": 1460.0
+    },
+    "RTX 3060 Ti": {
+      "category": "gpu",
+      "condition": "used",
+      "tse_score": 5939,
+      "prices": {
+        "xianyu": 1408.0
+      },
+      "daily_low": 1408.0
+    },
+    "RTX 3060 12GB": {
+      "category": "gpu",
+      "condition": "used",
+      "tse_score": 4096,
+      "prices": {
+        "xianyu": 1380.0
+      },
+      "daily_low": 1380.0
+    },
+    "RTX 2080 Ti 22GB": {
+      "category": "gpu",
+      "condition": "used",
+      "tse_score": 7086,
+      "prices": {
+        "xianyu": 1810.0
+      },
+      "daily_low": 1810.0
+    },
+    "RX 6900 XT": {
+      "category": "gpu",
+      "condition": "used",
+      "tse_score": 10028,
+      "prices": {
+        "xianyu": 2000.0
+      },
+      "daily_low": 2000.0
+    },
+    "RX 6800 XT": {
+      "category": "gpu",
+      "condition": "used",
+      "tse_score": 9273,
+      "prices": {
+        "xianyu": 1667.0
+      },
+      "daily_low": 1667.0
+    },
+    "RX 6700 XT": {
+      "category": "gpu",
+      "condition": "used",
+      "tse_score": 5966,
+      "prices": {
+        "xianyu": 1195.0
+      },
+      "daily_low": 1195.0
+    },
+    "RX 6600 XT": {
+      "category": "gpu",
+      "condition": "used",
+      "tse_score": 4417,
+      "prices": {
+        "xianyu": 930.0
+      },
+      "daily_low": 930.0
+    },
+    "RX 5700 XT": {
+      "category": "gpu",
+      "condition": "used",
+      "tse_score": 4396,
+      "prices": {
+        "xianyu": 710.0
+      },
+      "daily_low": 710.0
     }
   }
 }
