@@ -9,3 +9,9 @@ pillow==12.3.0
 langchain-openai==1.0.2
 langchain-core==1.0.4
 faster-whisper==1.1.1
+# 抽帧和抽音频用的 ffmpeg 可执行文件由它提供，不依赖系统安装
+imageio-ffmpeg==0.5.1
+qrcode==8.2
+# MySQL 驱动。MySQL 8 默认 caching_sha2_password，需要 cryptography 才能连上
+PyMySQL==1.1.1
+cryptography==43.0.3
