@@ -35,6 +35,11 @@ DEFAULT_HEADERS = {
     "Referer": "https://www.bilibili.com",
 }
 
+# B站对同一 IP 的接口调用有频控，连续请求会直接返回 code=-352（风控校验失败）。
+# 每次请求至少间隔 2 秒；命中风控后按 5/15/30 秒退避重试，仍失败才放弃。
+REQUEST_INTERVAL = 2.0
+RISK_BACKOFF = (5, 15, 30)
+
 
 class BilibiliCrawler:
     """B站视频内容爬虫"""
@@ -45,6 +50,63 @@ class BilibiliCrawler:
         if BILIBILI_COOKIE:
             self.session.headers["Cookie"] = BILIBILI_COOKIE
         self._mixin_key = None
+        self._last_request_at = 0.0
+
+    # ---------- 请求限速 ----------
+
+    def _throttle(self):
+        """保证两次请求之间至少间隔 REQUEST_INTERVAL 秒"""
+        wait = REQUEST_INTERVAL - (time.time() - self._last_request_at)
+        if wait > 0:
+            time.sleep(wait)
+        self._last_request_at = time.time()
+
+    def _get(self, url: str, **kwargs):
+        """
+        限速 + 风控退避的 GET
+
+        命中 code=-352 时按 RISK_BACKOFF 依次等待重试，调用方只需要看返回内容。
+        非 JSON 响应（sprite 图片、字幕文件）直接返回，不参与风控判断。
+        """
+        timeout = kwargs.pop("timeout", 15)
+        resp = None
+        for delay in (0,) + RISK_BACKOFF:
+            if delay:
+                logger.warning(f"[bilibili] 触发风控(code=-352)，等待 {delay}s 后重试")
+                time.sleep(delay)
+            self._throttle()
+            resp = self.session.get(url, timeout=timeout, **kwargs)
+            try:
+                code = resp.json().get("code")
+            except ValueError:
+                return resp
+            if code != -352:
+                return resp
+        logger.error("[bilibili] 多次退避后仍被风控，放弃本次请求")
+        return resp
+
+    # ---------- 登录态 ----------
+
+    def check_login(self) -> bool:
+        """
+        检查 Cookie 是否有效
+
+        匿名请求的风控阈值远低于登录态，Cookie 过期后仍会带上但不起作用，
+        只会在后面某次请求突然收到 -352。启动时先确认一次，问题当场暴露。
+        """
+        try:
+            data = self._get("https://api.bilibili.com/x/web-interface/nav", timeout=10).json()
+        except Exception as e:
+            logger.warning(f"[bilibili] 登录状态检查失败: {e}")
+            return False
+        if data.get("code") == 0 and (data.get("data") or {}).get("isLogin"):
+            return True
+        logger.warning(
+            "[bilibili] Cookie 无效或已过期（nav 返回 isLogin=False），"
+            "将以匿名身份请求，极易触发 -352 风控。"
+            "请重新登录 bilibili.com 后复制 Cookie 写入 .env 的 BILIBILI_COOKIE。"
+        )
+        return False
 
     # ---------- wbi 签名 ----------
 
@@ -53,7 +115,7 @@ class BilibiliCrawler:
         if self._mixin_key:
             return self._mixin_key
         try:
-            resp = self.session.get("https://api.bilibili.com/x/web-interface/nav", timeout=10)
+            resp = self._get("https://api.bilibili.com/x/web-interface/nav", timeout=10)
             data = resp.json()
             img_url = data["data"]["wbi_img"]["img_url"]
             sub_url = data["data"]["wbi_img"]["sub_url"]
@@ -94,6 +156,7 @@ class BilibiliCrawler:
         videos = []
         page = 1
         page_size = 30
+        self.check_login()
 
         while len(videos) < max_count:
             params = self._enc_wbi({
@@ -105,7 +168,7 @@ class BilibiliCrawler:
                 "web_location": "1550101",
             })
             try:
-                resp = self.session.get(
+                resp = self._get(
                     "https://api.bilibili.com/x/space/wbi/arc/search",
                     params=params, timeout=15,
                 )
@@ -141,7 +204,6 @@ class BilibiliCrawler:
                     break
 
             page += 1
-            time.sleep(0.8)  # 限速
 
         logger.info(f"[bilibili] 获取到 {len(videos)} 个视频(uid={uid})")
         return videos
@@ -151,7 +213,7 @@ class BilibiliCrawler:
     def get_video_detail(self, bvid: str) -> dict:
         """获取视频详情（标题、简介、cid、aid）"""
         try:
-            resp = self.session.get(
+            resp = self._get(
                 f"https://api.bilibili.com/x/web-interface/view?bvid={bvid}",
                 timeout=10,
             )
@@ -178,7 +240,7 @@ class BilibiliCrawler:
         :return: 音频 URL，失败返回空字符串
         """
         try:
-            resp = self.session.get(
+            resp = self._get(
                 "https://api.bilibili.com/x/player/playurl",
                 params={"bvid": bvid, "cid": cid, "fnval": 4048, "fourk": 1},
                 timeout=15,
@@ -203,7 +265,7 @@ class BilibiliCrawler:
         if not aid or not cid:
             return ""
         try:
-            resp = self.session.get(
+            resp = self._get(
                 f"https://api.bilibili.com/x/player/v2?cid={cid}&aid={aid}",
                 timeout=10,
             )
@@ -216,7 +278,7 @@ class BilibiliCrawler:
                 return ""
             if not sub_url.startswith("http"):
                 sub_url = "https:" + sub_url
-            resp2 = self.session.get(sub_url, timeout=10)
+            resp2 = self._get(sub_url, timeout=10)
             sub_data = resp2.json()
             lines = [item["content"] for item in sub_data.get("body", [])]
             return " ".join(lines)
@@ -229,7 +291,7 @@ class BilibiliCrawler:
         if not aid:
             return []
         try:
-            resp = self.session.get(
+            resp = self._get(
                 f"https://api.bilibili.com/x/v2/reply?type=1&oid={aid}&pn=1&ps={count}&sort=1",
                 timeout=10,
             )
@@ -271,7 +333,7 @@ class BilibiliCrawler:
         data = None
         for attempt in range(3):
             try:
-                resp = self.session.get(
+                resp = self._get(
                     "https://api.bilibili.com/x/player/videoshot",
                     params={"index": 1, "cid": cid, "bvid": bvid},
                     timeout=15,
@@ -302,7 +364,7 @@ class BilibiliCrawler:
         if sprite_url.startswith("//"):
             sprite_url = "https:" + sprite_url
         try:
-            sprite_bytes = self.session.get(sprite_url, timeout=20).content
+            sprite_bytes = self._get(sprite_url, timeout=20).content
             sprite = Image.open(io.BytesIO(sprite_bytes))
         except Exception as e:
             logger.error(f"[bilibili] 下载 sprite 失败({bvid}): {e}")
@@ -343,13 +405,16 @@ class BilibiliCrawler:
                          output_dir: str = None, quality: int = 64,
                          max_seconds: int = None) -> list:
         """
-        用 ffmpeg 从视频流按固定间隔抽帧（真正的每 N 秒一帧）
+        用 ffmpeg 从视频流按固定间隔抽帧，再由调用方做内容去重
+
+        3 秒一帧的取舍：价格表通常停留十几秒以上，3 秒能稳定覆盖；
+        同一张表的重复帧交给 dedupe_frames 合并，不会重复送给视觉模型。
 
         和 get_video_snapshots 的区别：
         - videoshot 是B站服务端生成的稀疏缩略图（5-6秒一张，480x270）
         - 本方法直接读视频流，间隔可精确控制，画质为原视频分辨率
 
-        :param interval: 抽帧间隔(秒)
+        :param interval: 抽帧间隔(秒)，默认 3 秒
         :param quality: 清晰度 qn，16=360P 32=480P 64=720P 80=1080P
         :param max_seconds: 只处理前 N 秒（None 表示全片）
         :return: [{"time": 秒数, "path": 路径, "bytes": 图片字节}, ...]
@@ -365,7 +430,7 @@ class BilibiliCrawler:
 
         # 1. 获取播放地址（DASH 格式）
         try:
-            resp = self.session.get(
+            resp = self._get(
                 "https://api.bilibili.com/x/player/playurl",
                 params={
                     "bvid": bvid, "cid": cid, "qn": quality,
@@ -411,6 +476,10 @@ class BilibiliCrawler:
         )
         cmd = [
             ffmpeg, "-y", "-loglevel", "error",
+            # B站 CDN 偶发 TLS 断连，让 ffmpeg 自己断点重连，比整段重来便宜得多
+            "-reconnect", "1",
+            "-reconnect_streamed", "1",
+            "-reconnect_delay_max", "5",
             "-headers", headers,
             "-i", video_url,
         ]
@@ -420,7 +489,9 @@ class BilibiliCrawler:
                 str(out_dir / "frame_%04d.jpg")]
 
         try:
-            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=900)
+            # 卡住时最多等 5 分钟。原来 15 分钟在网络差时会长时间静默挂起，
+            # 外层连重试的机会都没有
+            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
             if proc.returncode != 0:
                 logger.error(f"[bilibili] ffmpeg 抽帧失败: {proc.stderr[:300]}")
                 return []
@@ -451,9 +522,7 @@ class BilibiliCrawler:
         detail = self.get_video_detail(bvid)
         if not detail:
             return {}
-        time.sleep(0.5)
         subtitles = self.get_subtitles(detail.get("aid"), detail.get("cid"))
-        time.sleep(0.5)
         comments = self.get_comments(detail.get("aid"), count=5)
 
         # 拼接所有文本
@@ -477,12 +546,15 @@ class BilibiliCrawler:
         }
 
 
-def dedupe_frames(frames: list, threshold: int = 8) -> list:
+def dedupe_frames(frames: list, threshold: int = 3) -> list:
     """
     按感知哈希(dHash)去重，只保留画面有明显变化的帧
 
-    3秒一帧时，一个10分钟视频有200张，但价格表往往停留几十秒，
-    大部分帧内容相同。去重后通常只剩 10-20%。
+    同一个画面停留多秒会产生重复帧，这里把几乎完全相同的帧合并成一张。
+
+    阈值必须保守（默认 3）：8x8 哈希只有 64 位，满屏密集表格在低分辨率下
+    结构高度趋同。实测 CPU 表和闲鱼表相邻两帧距离只有 4，阈值设 8 会把
+    闲鱼表整张丢掉。宁可多送几张给视觉模型，也不能漏表。
 
     :param frames: [{"time", "bytes", ...}, ...]
     :param threshold: 汉明距离阈值，<= 该值视为相同

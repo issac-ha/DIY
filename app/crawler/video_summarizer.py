@@ -14,27 +14,43 @@ from langchain_openai import ChatOpenAI
 from app.config import VISION_API_KEY, VISION_BASE_URL, VISION_MODEL
 from app.core.logger import logger
 
-# 单次请求最多几张截图
-BATCH_SIZE = 4
+# 单次请求最多几张截图。
+# 4 张时一批可能同时出现内存、CPU、闲鱼三张表，输出超过字数上限后模型会截断，
+# 尾部那张表整段丢失（11-20 那期闲鱼只入库 12 条）。降到 2 张，一批最多两张表。
+BATCH_SIZE = 2
+
+# 单批输出的字数上限。超过 95% 视为可能截断，触发逐帧重读
+MAX_OUTPUT_CHARS = 2500
 
 # 单批截图的分析 prompt
 FRAME_PROMPT = """这些是同一个硬件资讯视频的连续截图（按时间顺序）。
 
-如果画面里有价格表格或价格文字，逐行提取能看清的内容，一行一条：
-型号 | 平台 | 价格
+如果画面里有价格表格，按表格的每一行输出一行，格式：
+行号|型号|平台=价格/涨跌幅|平台=价格/涨跌幅|...
+
+示例：
+01|RTX 5090 D|taobao=44499/-|pdd=42999/+300|douyin=52000/-
+02|DDR5 32GB*2|taobao=4844/+245|pdd=5399/+100|douyin=5299/+101
+03|RTX 5090D 32G|xianyu=32200/-125
 
 规则：
-1. 表格里的数字清晰就照抄，不要换算、不要推测
-2. 模糊到无法确认的单元格直接跳过，不要猜
-3. 平台按符号映射到标准名：
-   - 某东 / 东 / 狗东 / 京东自营 → jd
-   - 某宝 / 宝 / 淘宝 → taobao
-   - 某多多 / 夕 / 多多 → pdd
-   - 某Yin / 音 / 抖 / 抖音 → douyin
-   - 无法判断 → unknown
-4. 没有价格信息时只回"无价格数据"
-5. 不要描述画面风格、标题、博主，只输出数据行
-6. 总输出不超过 250 字
+1. 一行只能有一个型号，该型号的所有平台写在同一行，禁止把同一型号拆成多行
+2. 行号从 01 开始连续递增，表格有几行就输出几行，禁止合并相邻行或跳过整行
+3. 格式是 平台=价格/涨跌幅：涨跌幅照抄，负号保留；没有涨跌幅写 -；
+   无货写"无货"；看不清写"?"，不要猜
+4. 平台映射：某东/京东/自营 → jd；某宝/淘宝/天猫 → taobao；
+   某多多/拼多多 → pdd；某Yin/抖音 → douyin；闲鱼/小黄鱼 → xianyu
+5. 显卡型号完整照抄，末尾的 S / Ti / Super / D / 12G / 16G 不能省略：
+   RTX 4070、RTX 4070 S、RTX 4070 Ti S 是三张不同的卡，
+   RTX 4080 和 RTX 4080 S 也是两张不同的卡，漏掉 S 会导致两行价格串号
+6. 内存、硬盘表的平台列是"现价 / 涨跌幅"：价格取现价，涨跌幅取后面的数字；
+   型号写 DDR5 32GB*2、PCIe 4.0 1TB 这类
+7. 标题含"小黄鱼"或"闲鱼"的表是二手成交价：成交价当价格，平台填 xianyu，
+   TSE跑分、性价比不是价格也不是涨跌幅
+8. 天梯图、跑分榜只有分数没有价格，跳过
+9. 没有价格信息时只回"无价格数据"
+10. 不要描述画面风格、标题、博主，只输出数据行
+11. 总输出不超过 2500 字
 """
 
 # 最终总结 prompt
@@ -67,7 +83,10 @@ def _vision_llm() -> ChatOpenAI:
         base_url=VISION_BASE_URL,
         model=VISION_MODEL,
         temperature=0.1,
-        max_tokens=800,
+        max_tokens=MAX_OUTPUT_CHARS,
+        # doubao-seed-2-1 默认开启深度思考，会把 max_tokens 全耗在 reasoning 上，
+        # 正文返回空。读表格只需要照抄，关掉思考。
+        extra_body={"thinking": {"type": "disabled"}},
     )
 
 
@@ -90,23 +109,40 @@ def analyze_snapshots(snapshots: list) -> str:
     llm = _vision_llm()
     descriptions = []
 
-    for start in range(0, len(snapshots), BATCH_SIZE):
-        batch = snapshots[start:start + BATCH_SIZE]
+    def _run(batch: list) -> tuple:
+        """读一批截图，返回（时间标签, 模型输出）"""
         content = [{"type": "text", "text": FRAME_PROMPT}]
         for snap in batch:
             content.append({
                 "type": "image_url",
                 "image_url": {"url": _to_data_url(snap["bytes"])},
             })
-
+        resp = llm.invoke([HumanMessage(content=content)])
         times = ", ".join(str(s["time"]) for s in batch)
+        return times, resp.content.strip()
+
+    for start in range(0, len(snapshots), BATCH_SIZE):
+        batch = snapshots[start:start + BATCH_SIZE]
+        batch_no = start // BATCH_SIZE + 1
         try:
-            resp = llm.invoke([HumanMessage(content=content)])
-            desc = resp.content.strip()
-            descriptions.append(f"[截图时间 {times} 秒]\n{desc}")
-            logger.info(f"[vision] 分析第 {start // BATCH_SIZE + 1} 批截图完成")
+            times, desc = _run(batch)
+            # 一批里可能同时出现内存、CPU、闲鱼三张表，写到字数上限时模型直接截断，
+            # 尾部那张表整段消失。发现截断就逐帧重读，单帧一张表不会再超限。
+            if len(batch) > 1 and (
+                desc.endswith("...") or len(desc) >= MAX_OUTPUT_CHARS * 0.95
+            ):
+                logger.warning(f"[vision] 第 {batch_no} 批输出疑似截断，改为逐帧重读")
+                parts = []
+                for snap in batch:
+                    snap_times, snap_desc = _run([snap])
+                    parts.append(f"[截图时间 {snap_times} 秒]\n{snap_desc}")
+                descriptions.append("\n\n".join(parts))
+            else:
+                descriptions.append(f"[截图时间 {times} 秒]\n{desc}")
+            logger.info(f"[vision] 分析第 {batch_no} 批截图完成")
         except Exception as e:
             logger.error(f"[vision] 分析截图失败: {e}")
+            times = ", ".join(str(s["time"]) for s in batch)
             descriptions.append(f"[截图时间 {times} 秒] 分析失败: {e}")
 
     return "\n\n".join(descriptions)

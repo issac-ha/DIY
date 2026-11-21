@@ -9,12 +9,17 @@
 2. ffmpeg 转成 16k 单声道 wav（whisper 要求）
 3. faster-whisper 中文转写（CPU int8 量化，无需 GPU）
 """
+import os
 import subprocess
 from pathlib import Path
 
 import imageio_ffmpeg
 
 from app.core.logger import logger
+
+# 模型缓存统一放 D 盘工具目录，避免占用系统盘。
+# 用 setdefault 是为了不覆盖用户已配置的 HF_HOME。
+os.environ.setdefault("HF_HOME", r"D:\tools\models\huggingface")
 
 # 模型大小：tiny/base/small/medium/large-v3
 # 中文硬件术语建议 small 以上，small 在 CPU 上约 4-6 倍实时速度
@@ -82,11 +87,14 @@ def download_audio(audio_url: str, out_path: Path) -> bool:
         return False
 
 
-def transcribe(audio_path: Path) -> str:
+def transcribe(audio_path: Path) -> list:
     """
-    语音转文字
+    语音转文字，保留分段和时间戳
 
-    :return: 纯文本（各段已拼接）
+    摘要和价格抽取只需要纯文本，但回答"视频里具体怎么说的"需要定位到时间点，
+    所以这里不拼成一整段，交给调用方按需合并。
+
+    :return: [{"start": 秒, "end": 秒, "text": 文本}]，失败返回空列表
     """
     model = _get_model()
     try:
@@ -97,33 +105,45 @@ def transcribe(audio_path: Path) -> str:
             vad_filter=True,
             initial_prompt=_INITIAL_PROMPT,
         )
-        parts = []
+        result = []
         for seg in segments:
             text = seg.text.strip()
             if text:
-                parts.append(text)
-        result = "".join(parts)
-        logger.info(f"[asr] 转写完成: {len(result)} 字, 音频 {info.duration:.0f} 秒")
+                result.append({
+                    "start": float(seg.start),
+                    "end": float(seg.end),
+                    "text": text,
+                })
+        total_chars = sum(len(item["text"]) for item in result)
+        logger.info(
+            f"[asr] 转写完成: {total_chars} 字, {len(result)} 段, "
+            f"音频 {info.duration:.0f} 秒"
+        )
         return result
     except Exception as e:
         logger.error(f"[asr] 转写失败: {e}")
-        return ""
+        return []
 
 
-def transcribe_video(crawler, bvid: str, cid: int, audio_dir: Path) -> str:
+def segments_to_text(segments: list) -> str:
+    """把转写分段拼成纯文本，保持原来无分隔符的拼接方式"""
+    return "".join((seg.get("text") or "") for seg in segments or [])
+
+
+def transcribe_video(crawler, bvid: str, cid: int, audio_dir: Path) -> list:
     """
     一步完成：取音频地址 -> 下载 -> 转写
 
     :param crawler: BilibiliCrawler 实例
     :param audio_dir: 音频缓存目录
-    :return: 转写文本，失败返回空字符串
+    :return: 转写分段列表，失败返回空列表
     """
     audio_url = crawler.get_audio_url(bvid, cid)
     if not audio_url:
-        return ""
+        return []
 
     audio_path = Path(audio_dir) / f"{bvid}.wav"
     if not download_audio(audio_url, audio_path):
-        return ""
+        return []
 
     return transcribe(audio_path)

@@ -26,9 +26,19 @@ RANGE_TOLERANCE = 0.20
 
 
 def load_benchmark() -> dict:
-    """加载基准价格表，返回 {型号: {...}} """
+    """加载全新价基准表，返回 {型号: {...}} """
     data = load_benchmark_meta()
     return data.get("products", {})
+
+
+def load_used_benchmark() -> dict:
+    """加载闲鱼二手成交价基准表，返回 {型号: {...}}
+
+    二手价必须和全新价分开比对：同一型号二手天然便宜几千块，
+    如果用全新价基准去校验，正常的二手价会被全判成"偏低异常"。
+    """
+    data = load_benchmark_meta()
+    return data.get("used_products", {})
 
 
 def load_benchmark_meta() -> dict:
@@ -49,6 +59,63 @@ def load_benchmark_meta() -> dict:
     except Exception as e:
         logger.error(f"[anomaly] 加载基准价格失败: {e}")
         return {}
+
+
+def save_benchmark_from_prices(prices: list, bench_date: str, source: str = "") -> str:
+    """
+    用某一期视频提取到的价格回写基准表
+
+    补历史数据时，基准不能拍脑袋填，直接拿区间第一期的真实价格当参照。
+    只更新这期视频里出现过的型号和平台；本期没采到的型号保留原值，
+    避免整个目录被清空导致后续全部"无基准价"放行。
+
+    :param prices: [{"name", "platform", "price", "condition", "category"}, ...]
+    :param bench_date: 基准日期，格式 YYYY-MM-DD
+    :param source: 基准来源说明，写进 note
+    :return: 基准文件路径
+    """
+    data = load_benchmark_meta() or {}
+    catalog = data.get("products", {})
+    used_catalog = data.get("used_products", {})
+
+    captured = {"new": {}, "used": {}}
+    for item in prices:
+        name = item.get("name")
+        price = item.get("price")
+        platform = item.get("platform")
+        if not name or not price or not platform:
+            continue
+        key = "used" if item.get("condition") == "used" else "new"
+        captured[key].setdefault(name, {})[platform] = price
+
+    # 只改价格，品牌/跑分/史低这些元信息沿用原基准表
+    for section, bucket in (("products", captured["new"]),
+                            ("used_products", captured["used"])):
+        old_section = data.get(section, {})
+        for name, platform_prices in bucket.items():
+            info = old_section.get(name) or {"category": "gpu"}
+            info["prices"] = platform_prices
+            info["daily_low"] = min(platform_prices.values())
+            old_section[name] = info
+
+    data["date"] = bench_date
+    data["data_date"] = bench_date
+    data["description"] = (
+        f"{bench_date} 行情价格基准表。价格单位：元。"
+        "顶层 products 是全新价；used_products 是闲鱼二手成交价。"
+        "由当日显卡日报视频截图提取，后续异常检测以这一期为参照。"
+    )
+    data["note"] = f"基准取自 {bench_date} 的视频{f'（{source}）' if source else ''}。"
+
+    BENCHMARK_FILE.parent.mkdir(parents=True, exist_ok=True)
+    BENCHMARK_FILE.write_text(
+        json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+    logger.info(
+        f"[anomaly] 基准表已更新: {bench_date}，"
+        f"全新 {len(captured['new'])} 个型号 / 二手 {len(captured['used'])} 个型号"
+    )
+    return str(BENCHMARK_FILE)
 
 
 def find_product(product_name: str, benchmark: dict = None) -> tuple:
@@ -106,11 +173,20 @@ def get_benchmark_price(product_name: str, platform: str, benchmark: dict = None
     return (prices.get(platform) if prices.get(platform) else None), lo, hi
 
 
+def _is_out_of_range(price: float, base_price: float) -> bool:
+    """判断价格是否偏离基准，低价商品和高价商品规则不同"""
+    diff = abs(price - base_price)
+    if base_price < LOW_PRICE_BOUNDARY:
+        return diff > ABS_THRESHOLD or diff / base_price > LOW_PCT_THRESHOLD
+    return diff / base_price > PCT_THRESHOLD
+
+
 def check_anomaly(product_name: str, platform: str, price: float,
-                  benchmark: dict = None) -> tuple:
+                  benchmark: dict = None, change: float = None) -> tuple:
     """
     检测价格是否异常
 
+    :param change: 视频表格里给出的当日涨跌幅（元），用于识别真实的单日大波动
     :return: (是否异常, 原因说明)
     """
     if not price or price <= 0:
@@ -132,27 +208,38 @@ def check_anomaly(product_name: str, platform: str, price: float,
             )
         return False, ""
 
+    rule = (
+        f"低价商品:绝对偏离>{ABS_THRESHOLD}元 或 相对偏离>{LOW_PCT_THRESHOLD*100:.0f}%"
+        if base_price < LOW_PRICE_BOUNDARY
+        else f"高价商品相对偏离>{PCT_THRESHOLD*100:.0f}%"
+    )
+
+    if not _is_out_of_range(price, base_price):
+        return False, ""
+
+    # 基准价只代表基准日，当天真实大涨会被误判（如 RX 9070 京东一天涨 1800 元）。
+    # 视频表格自带涨跌幅，用"今价 - 涨跌"还原出昨价再比一次：昨价贴着基准，
+    # 说明偏离来自真实波动而不是读错型号/价格，放行。
+    if change:
+        yesterday = price - change
+        if not _is_out_of_range(yesterday, base_price):
+            logger.info(
+                f"[anomaly] {product_name} @ {platform}: {price:.0f} 元偏离基准 "
+                f"{base_price:.0f} 元，扣掉当日涨跌 {change:+.0f} 后为 {yesterday:.0f} 元，"
+                f"属正常波动，放行"
+            )
+            return False, ""
+
     diff = price - base_price
     abs_diff = abs(diff)
     pct = abs_diff / base_price
-
-    if base_price < LOW_PRICE_BOUNDARY:
-        is_anomaly = abs_diff > ABS_THRESHOLD or pct > LOW_PCT_THRESHOLD
-        rule = f"低价商品:绝对偏离>{ABS_THRESHOLD}元 或 相对偏离>{LOW_PCT_THRESHOLD*100:.0f}%"
-    else:
-        is_anomaly = pct > PCT_THRESHOLD
-        rule = f"高价商品相对偏离>{PCT_THRESHOLD*100:.0f}%"
-
-    if is_anomaly:
-        direction = "偏高" if diff > 0 else "偏低"
-        reason = (
-            f"价格异常({direction}): {price:.0f} 元 vs 基准 {base_price:.0f} 元, "
-            f"偏离 {abs_diff:.0f} 元({pct*100:.1f}%), 规则[{rule}]"
-        )
-        logger.warning(f"[anomaly] {product_name} @ {platform}: {reason}")
-        return True, reason
-
-    return False, ""
+    direction = "偏高" if diff > 0 else "偏低"
+    reason = (
+        f"价格异常({direction}): {price:.0f} 元 vs 基准 {base_price:.0f} 元, "
+        f"偏离 {abs_diff:.0f} 元({pct*100:.1f}%), 规则[{rule}]"
+    )
+    logger.warning(f"[anomaly] {product_name} @ {platform}: {reason}")
+    return True, reason
 
 
 def filter_anomalous_items(items: list, product_name: str, platform: str,
