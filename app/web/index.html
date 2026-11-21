@@ -2,124 +2,557 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>DIY Agent - 硬件价格分析</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>硬件行情看板 · DIY Agent</title>
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
     <style>
-        body { font-family: "Microsoft YaHei", sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; background: #f5f5f5; }
-        .chat-box { background: white; border-radius: 8px; padding: 20px; height: 500px; overflow-y: auto; margin-bottom: 20px; }
-        .msg { margin: 10px 0; padding: 10px 15px; border-radius: 8px; max-width: 80%; }
-        .user { background: #409eff; color: white; margin-left: auto; }
-        .bot { background: #f0f0f0; }
-        .input-area { display: flex; gap: 10px; }
-        input { flex: 1; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; }
-        button { padding: 12px 24px; background: #409eff; color: white; border: none; border-radius: 6px; cursor: pointer; }
-        button:hover { background: #337ecc; }
-        .chart-container { display: none; background: white; border-radius: 8px; padding: 20px; margin-bottom: 20px; }
-        .chart-container.show { display: block; }
-        #chart { width: 100%; height: 300px; }
+        :root {
+            --bg: #f3f5f9;
+            --card: #ffffff;
+            --line: #e6e9f0;
+            --text: #1f2430;
+            --muted: #8a91a3;
+            --accent: #2962ff;
+            --up: #d9433f;      /* A股习惯：红涨 */
+            --down: #0f9d63;    /* 绿跌 */
+            --best: #e9f7ef;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            background: var(--bg);
+            color: var(--text);
+            font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
+            font-size: 14px;
+        }
+        .topbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 18px 28px;
+            background: #101728;
+            color: #fff;
+        }
+        .brand { display: flex; align-items: center; gap: 14px; }
+        .logo {
+            display: grid;
+            place-items: center;
+            width: 42px;
+            height: 42px;
+            border-radius: 12px;
+            background: linear-gradient(135deg, #2962ff, #7c4dff);
+            font-weight: 700;
+            font-size: 13px;
+            letter-spacing: 0.5px;
+        }
+        .brand h1 { margin: 0; font-size: 18px; font-weight: 600; }
+        .brand p { margin: 3px 0 0; font-size: 12px; color: #9aa4bf; }
+        .chat-link {
+            color: #cdd6f4;
+            text-decoration: none;
+            font-size: 13px;
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            padding: 7px 14px;
+            border-radius: 999px;
+        }
+        .chat-link:hover { background: rgba(255, 255, 255, 0.08); }
+
+        .layout {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) 340px;
+            gap: 18px;
+            padding: 20px 28px 40px;
+            max-width: 1440px;
+            margin: 0 auto;
+        }
+        .main-col, .side-col { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+        .card {
+            background: var(--card);
+            border: 1px solid var(--line);
+            border-radius: 14px;
+            padding: 16px 18px;
+            box-shadow: 0 1px 2px rgba(16, 23, 40, 0.04);
+        }
+        .card-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+        .card-head h2 { margin: 0; font-size: 15px; font-weight: 600; }
+        .hint { font-size: 12px; color: var(--muted); }
+
+        .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; }
+        .field { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+        select {
+            padding: 8px 12px;
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            background: #fff;
+            color: var(--text);
+            font-size: 13px;
+            outline: none;
+        }
+        .tabs { display: inline-flex; background: #f0f2f7; border-radius: 9px; padding: 3px; gap: 2px; }
+        .tabs button {
+            border: 0;
+            background: transparent;
+            color: #5b6274;
+            padding: 7px 14px;
+            border-radius: 7px;
+            cursor: pointer;
+            font-size: 13px;
+            font-family: inherit;
+        }
+        .tabs button.active { background: #fff; color: var(--accent); font-weight: 600; box-shadow: 0 1px 3px rgba(16, 23, 40, 0.12); }
+        .tabs.small button { padding: 5px 12px; font-size: 12px; }
+
+        .table-wrap { overflow: auto; max-height: 520px; border-radius: 10px; border: 1px solid var(--line); }
+        table { width: 100%; border-collapse: collapse; min-width: 640px; }
+        thead th {
+            position: sticky;
+            top: 0;
+            z-index: 1;
+            background: #f7f8fb;
+            color: #6b7285;
+            font-weight: 500;
+            font-size: 12px;
+            text-align: right;
+            padding: 11px 12px;
+            border-bottom: 1px solid var(--line);
+            white-space: nowrap;
+        }
+        thead th:first-child { text-align: left; }
+        tbody td {
+            padding: 11px 12px;
+            border-bottom: 1px solid #f0f2f7;
+            text-align: right;
+            white-space: nowrap;
+        }
+        tbody tr:last-child td { border-bottom: 0; }
+        tbody tr { cursor: pointer; transition: background 0.12s; }
+        tbody tr:hover { background: #f7f9ff; }
+        tbody tr.active { background: #eef3ff; box-shadow: inset 3px 0 0 var(--accent); }
+        .name-col { text-align: left; }
+        .name { font-weight: 600; font-size: 13.5px; }
+        .sub { margin-top: 3px; font-size: 11px; color: var(--muted); }
+        .price { font-variant-numeric: tabular-nums; }
+        .delta { margin-top: 2px; font-size: 11px; font-variant-numeric: tabular-nums; }
+        .up { color: var(--up); }
+        .down { color: var(--down); }
+        .flat { color: var(--muted); }
+        .muted { color: #c3c8d4; }
+        .price-cell.best { background: #f2fbf6; }
+        .price-cell.best .price { color: #0b7a4b; font-weight: 700; }
+        .lowest-cell { background: #f8fdf9; }
+        .lowest-cell .price { color: #0b7a4b; font-weight: 700; }
+        .empty, .empty-text { color: var(--muted); font-size: 13px; padding: 26px 4px; text-align: center; }
+
+        #chart { width: 100%; height: 360px; }
+        .chart-card { position: relative; }
+
+        .digest .summary {
+            margin: 0;
+            font-size: 13px;
+            line-height: 1.75;
+            color: #3c4354;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+        .news { list-style: none; margin: 0; padding: 0; max-height: 360px; overflow: auto; }
+        .news li { padding: 10px 0; border-bottom: 1px dashed var(--line); }
+        .news li:last-child { border-bottom: 0; }
+        .news-title { font-size: 13px; font-weight: 600; line-height: 1.5; }
+        .news-detail { margin-top: 4px; font-size: 12px; color: #6b7285; line-height: 1.6; }
+        .news-meta { margin-top: 4px; font-size: 11px; color: var(--muted); }
+
+        @media (max-width: 1080px) {
+            .layout { grid-template-columns: 1fr; padding: 16px; }
+            .topbar { padding: 14px 16px; }
+        }
     </style>
 </head>
 <body>
-    <h2>硬件价格分析助手</h2>
-    <div class="chat-box" id="chatBox"></div>
-    <div class="chart-container" id="chartContainer">
-        <div id="chartTitle">价格趋势</div>
-        <div id="chart"></div>
-    </div>
-    <div class="input-area">
-        <input type="text" id="userInput" placeholder="输入你的问题，如：RTX 4060 多少钱？" onkeydown="if(event.key==='Enter')send()">
-        <button onclick="send()">发送</button>
-    </div>
+    <header class="topbar">
+        <div class="brand">
+            <div class="logo">DIY</div>
+            <div>
+                <h1>硬件行情看板</h1>
+                <p>B站日报数据 · 多平台比价与单品价格走势</p>
+            </div>
+        </div>
+        <a class="chat-link" href="/chat.html">Agent 对话</a>
+    </header>
+
+    <main class="layout">
+        <section class="main-col">
+            <div class="card toolbar">
+                <label class="field">
+                    日期
+                    <select id="dateSelect"></select>
+                </label>
+                <div class="tabs" id="categoryTabs">
+                    <button data-category="gpu" class="active">显卡</button>
+                    <button data-category="cpu">CPU</button>
+                    <button data-category="memory">内存</button>
+                    <button data-category="ssd">硬盘</button>
+                </div>
+                <div class="tabs" id="conditionTabs">
+                    <button data-condition="new" class="active">全新</button>
+                    <button data-condition="used">二手</button>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-head">
+                    <h2>平台比价</h2>
+                    <span class="hint" id="tableHint">加载中…</span>
+                </div>
+                <div class="table-wrap">
+                    <table id="priceTable">
+                        <thead></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+                <div class="empty" id="tableEmpty" hidden></div>
+            </div>
+
+            <div class="card chart-card">
+                <div class="card-head">
+                    <h2 id="chartTitle">价格走势</h2>
+                    <div class="tabs small" id="daysTabs">
+                        <button data-days="7" class="active">7 天</button>
+                        <button data-days="30">30 天</button>
+                    </div>
+                </div>
+                <div id="chart"></div>
+                <div class="empty" id="chartEmpty">点击上方表格中的型号，查看该型号在各平台的价格走势</div>
+            </div>
+        </section>
+
+        <aside class="side-col">
+            <div class="card">
+                <div class="card-head">
+                    <h2>当日行情归纳</h2>
+                    <span class="hint" id="digestDate"></span>
+                </div>
+                <div id="digestBody" class="digest"></div>
+            </div>
+            <div class="card">
+                <div class="card-head">
+                    <h2>硬件新闻</h2>
+                    <span class="hint" id="newsHint"></span>
+                </div>
+                <ul id="newsList" class="news"></ul>
+            </div>
+        </aside>
+    </main>
 
     <script>
-        const chatBox = document.getElementById('chatBox');
-        const userInput = document.getElementById('userInput');
+        // 平台英文标识来自采集器，展示时统一换成中文
+        const PLATFORM_NAMES = {
+            jd: "京东", taobao: "淘宝", pdd: "拼多多",
+            douyin: "抖音", xianyu: "闲鱼"
+        };
 
-        function addMessage(text, role) {
-            const div = document.createElement('div');
-            div.className = 'msg ' + role;
-            div.textContent = text;
-            chatBox.appendChild(div);
-            chatBox.scrollTop = chatBox.scrollHeight;
+        // 页面只在这一处保存状态，切换筛选后按状态重新拉数据
+        const state = {
+            date: "",
+            category: "gpu",
+            condition: "new",
+            selected: "",
+            days: 7
+        };
+
+        let chart = null;
+
+        async function fetchJSON(url) {
+            const resp = await fetch(url);
+            if (!resp.ok) throw new Error("接口返回 " + resp.status);
+            return resp.json();
         }
-        //画价格趋势折线图
-        function renderChart(name,dates,prices){
-            const container = document.getElementById('chartContainer');
-            const chartDom= document.getElementById('chart');
-            document.getElementById('chartTitle').textContent = name + ' 价格趋势';
-            
-            // 显示图表容器
-            container.classList.add('show');
 
-            // 初始化 ECharts 实例
-            let chart = echarts.getInstanceByDom(chartDom);
-            if (!chart) {
-                chart = echarts.init(chartDom);
+        function escapeHtml(text) {
+            return String(text ?? "")
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;");
+        }
+
+        function fmtPrice(value) {
+            if (value === null || value === undefined) return "—";
+            return Number(value).toLocaleString("zh-CN");
+        }
+
+        // 涨跌用箭头加数字，颜色沿用红涨绿跌
+        function deltaHTML(change) {
+            if (!change || change.change === null || change.change === undefined) return "";
+            const amount = Number(change.change);
+            if (amount === 0) return '<div class="delta flat">持平</div>';
+            const cls = amount > 0 ? "up" : "down";
+            const arrow = amount > 0 ? "↑" : "↓";
+            return `<div class="delta ${cls}">${arrow}${fmtPrice(Math.abs(amount))}</div>`;
+        }
+
+        function renderTable(data) {
+            const thead = document.querySelector("#priceTable thead");
+            const tbody = document.querySelector("#priceTable tbody");
+            const empty = document.getElementById("tableEmpty");
+            const products = data.products || [];
+            const platforms = data.platforms || [];
+
+            document.getElementById("tableHint").textContent = data.date
+                ? `${data.date} · ${products.length} 个型号`
+                : "";
+
+            if (!products.length) {
+                thead.innerHTML = "";
+                tbody.innerHTML = "";
+                empty.hidden = false;
+                empty.textContent = state.condition === "used"
+                    ? "这个品类目前只有全新价，没有二手数据"
+                    : "这一天没有该品类的数据，换一个日期试试";
+                resetChart();
+                return;
             }
-            //配置图表
-            chart.setOption({
-               tooltip : {
-                    trigger: 'axis'
-                },
-                xAxis: {
-                    type: 'category',
-                    data: dates,
-                    boundaryGap: false
-                },
-                yAxis: {
-                    type: 'value',
-                    name: '价格 (元)'
-                },
-                series: [{
-                    data: prices,
-                    type: 'line',
-                    smooth: true,
-                    areaStyle: {opacity: 0.2},
-                    lineStyle: {color: '#409eff'},
-                    itemStyle: {color: '#409eff'}
-                }]
+            empty.hidden = true;
+
+            const heads = ["型号", ...platforms.map(p => PLATFORM_NAMES[p] || p), "最低价"];
+            thead.innerHTML = "<tr>" + heads.map((h, i) =>
+                `<th class="${i === 0 ? "name-col" : ""}">${h}</th>`
+            ).join("") + "</tr>";
+
+            tbody.innerHTML = products.map(product => {
+                const cells = platforms.map(platform => {
+                    const price = product.prices[platform];
+                    if (price === null || price === undefined) {
+                        return '<td class="muted">—</td>';
+                    }
+                    const isBest = platform === product.lowest_platform;
+                    const change = (product.changes || {})[platform];
+                    return `<td class="price-cell ${isBest ? "best" : ""}">
+                        <div class="price">${fmtPrice(price)}</div>${deltaHTML(change)}
+                    </td>`;
+                }).join("");
+
+                // 内存/硬盘表才有"今日最低店铺、最低型号"，显卡表留空
+                const extra = product.lowest_shop
+                    ? `<div class="sub">${escapeHtml(product.lowest_shop)}${product.lowest_model ? " · " + escapeHtml(product.lowest_model) : ""}</div>`
+                    : "";
+
+                return `<tr data-name="${escapeHtml(product.name)}">
+                    <td class="name-col">
+                        <div class="name">${escapeHtml(product.name)}</div>${extra}
+                    </td>
+                    ${cells}
+                    <td class="lowest-cell">
+                        <div class="price">${fmtPrice(product.lowest_price)}</div>
+                        <div class="sub">${PLATFORM_NAMES[product.lowest_platform] || product.lowest_platform}</div>
+                    </td>
+                </tr>`;
+            }).join("");
+
+            // 事件委托：行是动态生成的，绑在 tbody 上只绑一次
+            tbody.onclick = (event) => {
+                const tr = event.target.closest("tr[data-name]");
+                if (tr) selectProduct(tr.dataset.name);
+            };
+        }
+
+        function resetChart() {
+            state.selected = "";
+            document.querySelectorAll("#priceTable tbody tr").forEach(tr => tr.classList.remove("active"));
+            document.getElementById("chartTitle").textContent = "价格走势";
+            document.getElementById("chartEmpty").hidden = false;
+            if (chart) chart.clear();
+        }
+
+        function selectProduct(name) {
+            state.selected = name;
+            document.querySelectorAll("#priceTable tbody tr").forEach(tr => {
+                tr.classList.toggle("active", tr.dataset.name === name);
             });
-            //自适应窗口大小
+            loadTrend();
+        }
+
+        async function loadTrend() {
+            if (!state.selected) return;
+            const url = `/api/trend?name=${encodeURIComponent(state.selected)}`
+                + `&days=${state.days}&condition=${state.condition}`;
+            try {
+                const data = await fetchJSON(url);
+                if (!data.dates || data.error) {
+                    document.getElementById("chartEmpty").hidden = false;
+                    document.getElementById("chartEmpty").textContent = data.error || "这个型号暂时没有历史价格";
+                    if (chart) chart.clear();
+                    return;
+                }
+                renderChart(data);
+            } catch (error) {
+                console.error("走势加载失败", error);
+            }
+        }
+
+        function renderChart(data) {
+            const dom = document.getElementById("chart");
+            if (!chart) chart = echarts.init(dom);
+            document.getElementById("chartEmpty").hidden = true;
+            document.getElementById("chartTitle").textContent =
+                `${data.name} · 近 ${state.days} 天价格走势`;
+
+            // 每个平台一条线，某天没有数据就断开，不要连成假曲线
+            const series = (data.series || [])
+                .filter(item => item.prices.some(v => v !== null && v !== undefined))
+                .map(item => ({
+                    name: item.name,
+                    type: "line",
+                    smooth: true,
+                    symbolSize: 5,
+                    connectNulls: false,
+                    data: item.prices,
+                    emphasis: { focus: "series" }
+                }));
+
+            chart.setOption({
+                tooltip: {
+                    trigger: "axis",
+                    valueFormatter: (value) => value === null || value === undefined
+                        ? "—"
+                        : `${Number(value).toLocaleString("zh-CN")} 元`
+                },
+                legend: { top: 0, itemWidth: 14, itemHeight: 8 },
+                grid: { left: 58, right: 24, top: 46, bottom: 34 },
+                xAxis: { type: "category", data: data.dates, boundaryGap: false },
+                yAxis: { type: "value", scale: true, name: "元" },
+                series
+            }, true);
             chart.resize();
         }
 
-        async function send() {
-            const msg = userInput.value.trim();
-            if (!msg) return;
-            addMessage(msg, 'user');
-            userInput.value = '';
-
+        async function loadDigest() {
+            const body = document.getElementById("digestBody");
             try {
-                const resp = await fetch('http://127.0.0.1:8000/chat', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({message: msg})
-                });
-                const data = await resp.json();
-                addMessage(data.reply, 'bot');
+                const data = await fetchJSON(`/api/digest?day=${state.date}`);
+                document.getElementById("digestDate").textContent = data.date || "";
 
-                // 判断是否在问价格趋势，是则调用接口画图
-                const trendKeywords = ['趋势', '走势', '涨跌', '价格变化', '最近价格'];
-                const isTrendQuery = trendKeywords.some(kw => msg.includes(kw));
-                if (isTrendQuery) {
-                    // 去掉趋势关键词，只保留产品名
-                    let keyword = msg;
-                    trendKeywords.forEach(kw => { keyword = keyword.replace(kw, ''); });
-                    keyword = keyword.trim();
-                    try {
-                        const trendResp = await fetch('http://127.0.0.1:8000/api/trend?name=' + encodeURIComponent(keyword) + '&days=7');
-                        const trendData = await trendResp.json();
-                        if (trendData.dates) {
-                            renderChart(trendData.name, trendData.dates, trendData.prices);
-                        }
-                    } catch (e) {
-                        console.error('趋势图加载失败：', e);
-                    }
+                if (data.market_summary) {
+                    body.innerHTML = `<p class="summary">${escapeHtml(data.market_summary)}</p>`;
+                } else {
+                    body.innerHTML = '<p class="empty-text">这一天还没有行情归纳。文字归档来自视频旁白，跑完 ASR 后才会出现大盘涨跌和板块表现。</p>';
                 }
-            } catch (e) {
-                addMessage('请求失败：' + e.message, 'bot');
+
+                // 当期新闻优先；没有归档就退回到最近两周的新闻
+                let news = data.news || [];
+                if (!news.length) {
+                    const latest = await fetchJSON("/api/news?days=14");
+                    news = latest.news || [];
+                }
+                renderNews(news);
+            } catch (error) {
+                console.error("行情归档加载失败", error);
+                body.innerHTML = '<p class="empty-text">行情归档加载失败</p>';
+                renderNews([]);
             }
         }
+
+        function renderNews(items) {
+            const list = document.getElementById("newsList");
+            document.getElementById("newsHint").textContent =
+                items.length ? `${items.length} 条` : "";
+            if (!items.length) {
+                list.innerHTML = '<li class="empty-text">最近没有采集到硬件新闻</li>';
+                return;
+            }
+            list.innerHTML = items.map(item => `
+                <li>
+                    <div class="news-title">${escapeHtml(item.title)}</div>
+                    ${item.detail ? `<div class="news-detail">${escapeHtml(item.detail)}</div>` : ""}
+                    ${item.date ? `<div class="news-meta">${escapeHtml(item.date)}</div>` : ""}
+                </li>
+            `).join("");
+        }
+
+        async function loadPrices() {
+            try {
+                const url = `/api/prices?day=${state.date}&category=${state.category}`
+                    + `&condition=${state.condition}`;
+                const data = await fetchJSON(url);
+                renderTable(data);
+
+                // 默认选中第一行，页面一打开就有走势图，不用先点
+                const products = data.products || [];
+                if (products.length) selectProduct(products[0].name);
+            } catch (error) {
+                document.getElementById("tableHint").textContent = "加载失败：" + error.message;
+            }
+        }
+
+        async function refreshAll() {
+            // 切换品类/成色后旧图表已经没意义，先清掉再拉新数据
+            resetChart();
+            await loadPrices();
+            await loadDigest();
+        }
+
+        async function init() {
+            try {
+                const data = await fetchJSON("/api/dates");
+                if (!data.dates.length) {
+                    document.getElementById("tableHint").textContent = "数据库里还没有价格数据";
+                    return;
+                }
+                const select = document.getElementById("dateSelect");
+                select.innerHTML = data.dates.map(item =>
+                    `<option value="${item.date}">${item.date}（${item.count} 条）</option>`
+                ).join("");
+                state.date = data.dates[0].date;
+                select.value = state.date;
+                select.addEventListener("change", () => {
+                    state.date = select.value;
+                    refreshAll();
+                });
+                await refreshAll();
+            } catch (error) {
+                document.getElementById("tableHint").textContent = "初始化失败：" + error.message;
+            }
+        }
+
+        document.getElementById("categoryTabs").addEventListener("click", (event) => {
+            const button = event.target.closest("button[data-category]");
+            if (!button) return;
+            state.category = button.dataset.category;
+            document.querySelectorAll("#categoryTabs button").forEach(btn => {
+                btn.classList.toggle("active", btn === button);
+            });
+            refreshAll();
+        });
+
+        document.getElementById("conditionTabs").addEventListener("click", (event) => {
+            const button = event.target.closest("button[data-condition]");
+            if (!button) return;
+            state.condition = button.dataset.condition;
+            document.querySelectorAll("#conditionTabs button").forEach(btn => {
+                btn.classList.toggle("active", btn === button);
+            });
+            refreshAll();
+        });
+
+        document.getElementById("daysTabs").addEventListener("click", (event) => {
+            const button = event.target.closest("button[data-days]");
+            if (!button) return;
+            state.days = Number(button.dataset.days);
+            document.querySelectorAll("#daysTabs button").forEach(btn => {
+                btn.classList.toggle("active", btn === button);
+            });
+            loadTrend();
+        });
+
+        // 窗口变宽变窄时折线图要跟着容器重算尺寸
+        window.addEventListener("resize", () => { if (chart) chart.resize(); });
+
+        init();
     </script>
 </body>
 </html>

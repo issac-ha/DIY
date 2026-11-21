@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>Agent 对话 · DIY Agent</title>
+    <style>
+        body { font-family: "Microsoft YaHei", sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; background: #f5f5f5; }
+        .chat-box { background: white; border-radius: 8px; padding: 20px; height: 500px; overflow-y: auto; margin-bottom: 20px; }
+        .msg { margin: 10px 0; padding: 10px 15px; border-radius: 8px; max-width: 80%; white-space: pre-wrap; line-height: 1.6; }
+        .user { background: #409eff; color: white; margin-left: auto; }
+        .bot { background: #f0f0f0; }
+        .pending { color: #888; font-style: italic; }
+        .toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .hint { color: #888; font-size: 12px; }
+        .input-area { display: flex; gap: 10px; }
+        input { flex: 1; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; }
+        button { padding: 12px 24px; background: #409eff; color: white; border: none; border-radius: 6px; cursor: pointer; }
+        button:hover { background: #337ecc; }
+        button:disabled { opacity: .6; cursor: not-allowed; }
+        .ghost { background: white; color: #409eff; border: 1px solid #409eff; padding: 6px 14px; font-size: 13px; }
+        .ghost:hover { background: #ecf5ff; }
+        .chart-container { display: none; background: white; border-radius: 8px; padding: 20px; margin-bottom: 20px; }
+        .chart-container.show { display: block; }
+        #chart { width: 100%; height: 300px; }
+        a { color: #409eff; text-decoration: none; }
+    </style>
+</head>
+<body>
+    <p><a href="/">← 返回行情看板</a></p>
+    <h2>硬件价格分析助手</h2>
+    <div class="chat-box" id="chatBox"></div>
+    <div class="chart-container" id="chartContainer">
+        <div id="chartTitle">价格趋势</div>
+        <div id="chart"></div>
+    </div>
+    <div class="toolbar">
+        <span class="hint">信息不全时，助手会先追问预算和用途，再给出多套方案</span>
+        <button class="ghost" onclick="resetChat()">新对话</button>
+    </div>
+    <div class="input-area">
+        <input type="text" id="userInput" placeholder="描述预算和用途，例如：6000 元想玩 2K 游戏" onkeydown="if(event.key==='Enter')send()">
+        <button id="sendBtn" onclick="send()">发送</button>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <script>
+        const chatBox = document.getElementById('chatBox');
+        const userInput = document.getElementById('userInput');
+        const sendBtn = document.getElementById('sendBtn');
+
+        // 完整对话历史：每次请求都发回后端，模型才能记住上一轮的预算和用途
+        let history = [];
+        let sending = false;
+
+        function addMessage(text, role) {
+            const div = document.createElement('div');
+            div.className = 'msg ' + role;
+            div.textContent = text;
+            chatBox.appendChild(div);
+            chatBox.scrollTop = chatBox.scrollHeight;
+            return div;
+        }
+
+        function resetChat() {
+            history = [];
+            chatBox.innerHTML = '';
+            addMessage('你好，告诉我预算和用途，我会先确认关键需求，再基于真实价格给出 2-3 套方案。', 'bot');
+        }
+
+        // 画价格趋势折线图
+        function renderChart(name, dates, prices) {
+            const container = document.getElementById('chartContainer');
+            const chartDom = document.getElementById('chart');
+            document.getElementById('chartTitle').textContent = name + ' 价格趋势';
+            container.classList.add('show');
+
+            // 只初始化一次，重复 init 会叠出多个实例
+            let chart = echarts.getInstanceByDom(chartDom);
+            if (!chart) {
+                chart = echarts.init(chartDom);
+            }
+            chart.setOption({
+                tooltip: { trigger: 'axis' },
+                xAxis: { type: 'category', data: dates, boundaryGap: false },
+                yAxis: { type: 'value', name: '价格 (元)', scale: true },
+                series: [{
+                    data: prices,
+                    type: 'line',
+                    smooth: true,
+                    areaStyle: { opacity: 0.2 },
+                    lineStyle: { color: '#409eff' },
+                    itemStyle: { color: '#409eff' }
+                }]
+            });
+            chart.resize();
+        }
+
+        // 趋势问题顺手补一张图；模型回答本身不依赖这张图
+        async function maybeRenderTrend(msg) {
+            const trendKeywords = ['趋势', '走势', '涨跌', '价格变化', '最近价格'];
+            if (!trendKeywords.some(kw => msg.includes(kw))) return;
+
+            let keyword = msg;
+            trendKeywords.forEach(kw => { keyword = keyword.replace(kw, ''); });
+            keyword = keyword.replace(/[?？,，。\s]/g, '').trim();
+            if (!keyword) return;
+
+            try {
+                const trendResp = await fetch('/api/trend?name=' + encodeURIComponent(keyword) + '&days=7');
+                const trendData = await trendResp.json();
+                if (trendData.dates) {
+                    renderChart(trendData.name, trendData.dates, trendData.prices);
+                }
+            } catch (e) {
+                console.error('趋势图加载失败：', e);
+            }
+        }
+
+        async function send() {
+            const msg = userInput.value.trim();
+            if (!msg || sending) return;
+
+            addMessage(msg, 'user');
+            history.push({ role: 'user', content: msg });
+            userInput.value = '';
+
+            sending = true;
+            sendBtn.disabled = true;
+            const pending = addMessage('正在查询价格并整理方案…', 'bot pending');
+
+            try {
+                // 页面由 FastAPI 提供，用相对路径即可，不需要写死 127.0.0.1
+                const resp = await fetch('/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ messages: history })
+                });
+                if (!resp.ok) {
+                    throw new Error('服务返回 ' + resp.status);
+                }
+                const data = await resp.json();
+                pending.remove();
+                addMessage(data.reply, 'bot');
+                history.push({ role: 'assistant', content: data.reply });
+                maybeRenderTrend(msg);
+            } catch (e) {
+                pending.remove();
+                addMessage('请求失败：' + e.message, 'bot');
+                // 失败时撤回这一轮用户消息，方便原样重发
+                history.pop();
+            } finally {
+                sending = false;
+                sendBtn.disabled = false;
+                userInput.focus();
+            }
+        }
+
+        resetChat();
+    </script>
+</body>
+</html>
