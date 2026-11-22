@@ -15,6 +15,10 @@ DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./diy_agent.db")
 # B站 Cookie（用于访问需要登录态的接口，如空间视频列表）
 BILIBILI_COOKIE = os.getenv("BILIBILI_COOKIE", "")
 
+# 接口鉴权 Key。留空表示不校验，适合 API 只绑回环地址的单机部署；
+# 一旦对外暴露（公网、局域网）必须配置，否则对话和采集接口谁都能调
+API_KEY = os.getenv("API_KEY", "")
+
 # 视觉模型配置（火山方舟 Doubao-Seed-2.1-lite，支持文本+视觉+音频）
 VISION_BASE_URL = os.getenv("VISION_BASE_URL", "https://ark.cn-beijing.volces.com/api/v3")
 VISION_MODEL = os.getenv("VISION_MODEL", "doubao-seed-2-1-lite-260915")

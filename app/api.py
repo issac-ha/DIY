@@ -1,14 +1,16 @@
 """FastAPI 后端接口"""
+import secrets
 from datetime import datetime
 from pathlib import Path
 
-from fastapi import FastAPI, BackgroundTasks, HTTPException
+from fastapi import FastAPI, BackgroundTasks, Depends, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from sqlalchemy import func
 
 from app.agent.hardware_agent import agent
+from app.config import API_KEY
 from app.db import repository
 from app.db.database import SessionLocal
 from app.db.models import Product, PriceHistory
@@ -26,6 +28,20 @@ app.add_middleware(
 PLATFORM_NAMES = {"jd": "京东", "taobao": "淘宝", "pdd": "拼多多",
                   "douyin": "抖音", "xianyu": "闲鱼"}
 REPORTS_DIR = Path(__file__).resolve().parents[1] / "reports"
+
+
+def verify_api_key(x_api_key: str | None = Header(default=None)):
+    """
+    接口鉴权：只有配置了 API_KEY 才校验
+
+    单机部署时 API 只绑回环地址，调用方都在本机，校验没有意义，
+    留空即关闭。部署到公网前在 .env 里配上即可，不需要改代码。
+    用 secrets.compare_digest 而不是 ==，避免字符串比较泄露前缀匹配长度。
+    """
+    if not API_KEY:
+        return
+    if not x_api_key or not secrets.compare_digest(x_api_key, API_KEY):
+        raise HTTPException(status_code=401, detail="无效的 API Key")
 
 
 class ChatMessage(BaseModel):
@@ -54,7 +70,7 @@ class ChatResponse(BaseModel):
 MAX_CHAT_MESSAGES = 20
 
 
-@app.post("/chat", response_model=ChatResponse)
+@app.post("/chat", response_model=ChatResponse, dependencies=[Depends(verify_api_key)])
 def chat(request: ChatRequest):
     """对话接口：接收多轮消息，返回 Agent 回答"""
     if request.messages:
@@ -328,10 +344,18 @@ def list_reports():
     return {"reports": [{"name": f.name, "content": f.read_text(encoding="utf-8")} for f in files[:5]]}
 
 
-@app.post("/api/collect")
+@app.post("/api/collect", dependencies=[Depends(verify_api_key)])
 def collect(bg: BackgroundTasks, videos: int = 2):
     """后台触发 B 站视频采集（耗时较长，放后台执行）"""
+    from app.crawler.bilibili_crawler import BilibiliCrawler, LoginRequiredError
     from app.crawler.bilibili_pipeline import BilibiliPipeline
+
+    # 登录态在入队前同步校验。Cookie 过期是可预期问题，直接返回 400，
+    # 否则异常会被后台任务吞掉，前端只看到"已开始"却永远拿不到数据
+    try:
+        BilibiliCrawler().check_login()
+    except LoginRequiredError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
     def _run():
         BilibiliPipeline().run(max_videos=videos)
