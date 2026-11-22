@@ -7,6 +7,7 @@ __pycache__/
 *.egg-info/
 .venv/
 venv/
+.pytest_cache/
 
 # 数据库与运行时数据
 *.db
@@ -21,6 +22,9 @@ reports/
 audio/
 _snapshots/
 cookies/
+# 扫码登录生成的一次性二维码，含临时登录凭证
+qrcode_login.png
+qrcode_login.html
 
 # 浏览器用户数据与运行时缓存（体积大，可能含登录态）
 .chrome-cdp/
@@ -31,9 +35,11 @@ cookies/
 .idea/
 
 # 学习练习文件与临时验证脚本（不属于项目）
-learn_*.py
-test_*.py
-_verify_*.py
+# 只忽略根目录下的临时脚本，不能写成 test_*.py，
+# 否则 tests/ 目录里的正式测试用例会被一起忽略
+/learn_*.py
+/test_*.py
+/_verify_*.py
 
 # 系统
 .DS_Store
