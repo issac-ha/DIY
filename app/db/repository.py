@@ -57,6 +57,15 @@ def save_price(product_name: str, platform: str, price: float,
     alert_msg = None
     record_date = record_date or date.today()
     is_latest = True
+
+    # 视频表格没标注涨跌，说明这次报价和上次持平；前一天没有数据也按持平处理。
+    # 统一落成 0，前端不用再区分"空"和"没变"，也不用靠历史价反推
+    # （反推在前一天缺失时会算出巨大的假涨跌幅）。
+    if change is None:
+        change = 0.0
+    if change_pct is None:
+        change_pct = 0.0
+
     try:
         product = db.query(Product).filter(
             and_(
@@ -75,6 +84,8 @@ def save_price(product_name: str, platform: str, price: float,
                 current_price=price,
                 platform=platform,
                 condition=condition,
+                change=change,
+                change_pct=change_pct,
             )
             db.add(product)
             db.flush()
