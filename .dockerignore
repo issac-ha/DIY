@@ -1,0 +1,42 @@
+# 密钥和本地配置不进镜像，运行时由 compose 通过 env_file 注入
+.env
+
+# 数据库文件：容器里用独立 MySQL，本地 SQLite 没有意义
+*.db
+*.sqlite3
+chroma_db/
+
+# Python 缓存和虚拟环境
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# 运行时产物：体积大且经常变化，挂载卷提供
+logs/
+snapshots/
+reports/
+audio/
+_snapshots/
+long_term_memory.json
+
+# 登录凭证
+cookies/
+qrcode_login.png
+qrcode_login.html
+.chrome-cdp/
+.playwright-browsers/
+
+# 版本控制和文档，镜像里用不到
+.git/
+.gitignore
+README.md
+docs/
+.vscode/
+.idea/
+
+# 临时脚本
+learn_*.py
+test_*.py
+_verify_*.py

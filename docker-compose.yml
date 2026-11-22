@@ -1,0 +1,61 @@
+# 本地开发用编排：应用 + 独立 MySQL
+# 宿主机上已有 MySQL 5.7 占用 3306，所以容器的 MySQL 对外映射到 3307，
+# 应用容器内部仍然通过服务名 mysql:3306 连接，不受影响
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: diy-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: diy_agent
+      MYSQL_USER: diy
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      TZ: Asia/Shanghai
+    # utf8mb4 才能存新闻里的表情符号和生僻字，utf8 是 3 字节会截断
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    ports:
+      # 同样只绑回环地址：数据库没必要对局域网开放
+      - "127.0.0.1:3307:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      # mysqladmin ping 只检查服务是否响应，不做业务查询
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      # MySQL 8 首次初始化数据目录需要几十秒，这段时间内的失败不算异常
+      start_period: 40s
+
+  app:
+    build: .
+    container_name: diy-agent
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    # 复用本地 .env 里的 LLM、视觉模型、B站 Cookie 等配置
+    env_file: .env
+    environment:
+      # 覆盖 .env 里的 127.0.0.1，容器内要连 compose 网络里的 mysql 服务
+      DATABASE_URL: mysql+pymysql://diy:${MYSQL_PASSWORD}@mysql:3306/diy_agent?charset=utf8mb4
+      TZ: Asia/Shanghai
+    ports:
+      # 只绑回环地址，局域网内其他设备访问不到。
+      # 对外暴露时改成 "8000:8000"，并在 .env 里配置 API_KEY
+      - "127.0.0.1:8000:8000"
+    volumes:
+      # 采集产物和日志挂到宿主机，容器重建不丢，也方便直接看
+      - ./logs:/app/logs
+      - ./snapshots:/app/snapshots
+      - ./reports:/app/reports
+      - ./audio:/app/audio
+      # faster-whisper 首次运行会下载模型，缓存下来避免每次重建都重下
+      - whisper_cache:/root/.cache/huggingface
+
+volumes:
+  mysql_data:
+  whisper_cache:
