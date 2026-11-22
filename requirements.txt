@@ -1,13 +1,21 @@
 fastapi==0.115.0
 uvicorn[standard]==0.30.6
 sqlalchemy==2.0.35
-langchain==1.0.3
+# LangChain 及其依赖必须成套固定版本。
+# 只钉 langchain 不钉 langgraph 时，pip 会解析出最新的 langgraph-checkpoint，
+# 它可能调用 langchain-core 里尚不存在的参数，构建能过但容器启动即报 TypeError
+langchain==1.4.10
+langchain-core==1.7.7
+langchain-openai==1.7.4
+langgraph==1.2.22
+langgraph-checkpoint==4.3.2
+langgraph-prebuilt==1.1.2
+langgraph-sdk==0.4.14
+openai==3.49.0
 python-dotenv==1.0.1
 loguru==0.7.2
 requests==2.34.2
 pillow==12.3.0
-langchain-openai==1.0.2
-langchain-core==1.0.4
 faster-whisper==1.1.1
 # 抽帧和抽音频用的 ffmpeg 可执行文件由它提供，不依赖系统安装
 imageio-ffmpeg==0.5.1
@@ -15,3 +23,6 @@ qrcode==8.2
 # MySQL 驱动。MySQL 8 默认 caching_sha2_password，需要 cryptography 才能连上
 PyMySQL==1.1.1
 cryptography==43.0.3
+
+# 测试。只在本地跑，容器镜像里也会装，但占用很小
+pytest==8.3.4
