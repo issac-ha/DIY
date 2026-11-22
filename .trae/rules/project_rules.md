@@ -17,7 +17,7 @@ AI 硬件价格分析 Agent，用于求职展示。数据来源是 B站硬件 UP
 | 文本模型 | DeepSeek `deepseek-chat` |
 | 视觉模型 | 火山方舟 `doubao-seed-2-1-lite-260915` |
 | 语音转写 | faster-whisper `small`，CPU int8 |
-| 数据库 | SQLite `./diy_agent.db` |
+| 数据库 | MySQL 8（生产，容器）/ SQLite（本地测试），由 `DATABASE_URL` 决定 |
 | 视频处理 | `imageio-ffmpeg` 自带二进制，不依赖系统 ffmpeg |
 
 ## 数据链路（顺序不可随意调换）
@@ -25,8 +25,8 @@ AI 硬件价格分析 Agent，用于求职展示。数据来源是 B站硬件 UP
 1. 拉取 UP 主视频列表，只保留标题含「显卡日报」的视频
 2. ffmpeg 按固定间隔抽帧（默认 3 秒，720P）
 3. dHash 感知哈希去重，丢弃画面无变化的帧
-4. 视觉模型分批读取（每批 4 张），提取型号、平台、价格
-5. faster-whisper 转写音频作为文本输入（不使用 B站 CC 字幕）
+4. 视觉模型分批读取（每批 2 张，检测截断后逐帧重读），提取型号、平台、价格
+5. faster-whisper 转写音频，保留分段与时间戳，不使用 B站 CC 字幕
 6. LLM 抽取结构化价格 JSON
 7. 基准价异常过滤，偏离阈值直接丢弃
 8. 入库并生成 Markdown 报告
@@ -78,8 +78,8 @@ AI 硬件价格分析 Agent，用于求职展示。数据来源是 B站硬件 UP
 
 ## 尚未完成
 
-- 基准价替换为 2026-01-01 真实数据
+- 全量历史视频补采
 - scheduler 定时采集
-- 企业级升级：MySQL、Redis、Docker、CI/CD
-- 前端多平台对比展示
+- Redis 缓存、CI/CD 流水线
+- RAG 语义检索
 - QQ 机器人接入
