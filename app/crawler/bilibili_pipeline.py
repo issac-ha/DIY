@@ -17,6 +17,7 @@ from sqlalchemy import func
 from app.crawler.bilibili_crawler import (
     BilibiliCrawler,
     HARDWARE_UPLOADERS,
+    LoginRequiredError,
     dedupe_frames,
 )
 from app.crawler.audio_transcriber import transcribe, transcribe_video, segments_to_text
@@ -619,7 +620,7 @@ def run_bilibili_collection(max_videos: int = 3, before_date: datetime = None,
     return pipeline.run(max_videos=max_videos, before_date=before_date)
 
 
-if __name__ == "__main__":
+def main() -> None:
     import argparse
 
     parser = argparse.ArgumentParser(description="B站硬件视频采集与总结")
@@ -690,3 +691,12 @@ if __name__ == "__main__":
     for r in results:
         print(f"  - {r['title'][:40]} | 价格 {len(r['prices'])} 条 | "
               f"{'失败: ' + r['error'] if r.get('error') else '成功'}")
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except LoginRequiredError as exc:
+        # 登录问题不是程序缺陷，用简洁提示代替 traceback，方便直接照做
+        print(f"\n[登录失败] {exc}")
+        raise SystemExit(1)

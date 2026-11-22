@@ -6,7 +6,10 @@ SESSDATA 的有效期由 B站服务端决定，没有可调用的刷新接口，
 
 用法：python -m app.crawler.bilibili_login
 """
+import base64
+import io
 import time
+import webbrowser
 from pathlib import Path
 
 import qrcode
@@ -21,6 +24,7 @@ POLL_URL = "https://passport.bilibili.com/x/passport-login/web/qrcode/poll"
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 ENV_FILE = PROJECT_ROOT / ".env"
 QR_FILE = PROJECT_ROOT / "qrcode_login.png"
+QR_HTML = PROJECT_ROOT / "qrcode_login.html"
 
 DEFAULT_HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -51,6 +55,54 @@ def _update_env(cookie: str):
     ENV_FILE.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
+def _render_qr_page(qr_url: str) -> bool:
+    """
+    生成二维码图片和展示页，并尝试自动打开浏览器
+
+    只存 PNG 需要用户自己去找文件，部分看图工具缩放后也扫不出来。
+    内嵌进本地 HTML 居中显示，打开即可扫。
+
+    :return: 浏览器是否成功唤起
+    """
+    buffer = io.BytesIO()
+    qrcode.make(qr_url).save(buffer)
+    image = buffer.getvalue()
+    QR_FILE.write_bytes(image)
+
+    data_uri = base64.b64encode(image).decode("ascii")
+    html = f"""<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>B站扫码登录</title>
+<style>
+  body {{
+    margin: 0; min-height: 100vh; display: flex;
+    align-items: center; justify-content: center;
+    background: #f5f6f7; font-family: "Microsoft YaHei", sans-serif;
+  }}
+  .box {{
+    background: #fff; padding: 40px 48px; border-radius: 12px;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, .08); text-align: center;
+  }}
+  h1 {{ font-size: 20px; margin: 0 0 8px; color: #18191c; }}
+  p {{ font-size: 14px; color: #61666d; margin: 0 0 24px; }}
+  img {{ width: 260px; height: 260px; display: block; }}
+</style>
+</head>
+<body>
+  <div class="box">
+    <h1>B站扫码登录</h1>
+    <p>请用 B站 App 扫描下方二维码，{POLL_TIMEOUT} 秒内有效</p>
+    <img src="data:image/png;base64,{data_uri}" alt="登录二维码">
+  </div>
+</body>
+</html>
+"""
+    QR_HTML.write_text(html, encoding="utf-8")
+    return webbrowser.open(QR_HTML.as_uri())
+
+
 def login() -> bool:
     """
     走一遍扫码登录流程
@@ -74,9 +126,12 @@ def login() -> bool:
 
     qr_url = data["data"]["url"]
     qrcode_key = data["data"]["qrcode_key"]
-    qrcode.make(qr_url).save(QR_FILE)
-    logger.info(f"[login] 二维码已保存: {QR_FILE}")
-    logger.info(f"[login] 请用 B站 App 扫码，{POLL_TIMEOUT} 秒内有效")
+    opened = _render_qr_page(qr_url)
+    logger.info(f"[login] 二维码页面: {QR_HTML}")
+    if opened:
+        logger.info(f"[login] 已自动打开浏览器，请用 B站 App 扫码，{POLL_TIMEOUT} 秒内有效")
+    else:
+        logger.warning(f"[login] 浏览器未自动打开，请手动双击 {QR_HTML}，{POLL_TIMEOUT} 秒内有效")
 
     deadline = time.time() + POLL_TIMEOUT
     last_status = None

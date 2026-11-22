@@ -7,7 +7,7 @@ B站爬虫：获取硬件UP主的视频内容（标题/简介/字幕/评论）�
 3. 视频简介
 
 注意：
-- 使用用户提供的 Cookie（从 .env 读取），不硬编码
+- 使用 Cookie（从 .env 读取），不硬编码
 - 请求限速，避免触发风控
 - 只获取公开内容，不涉及隐私
 """
@@ -41,14 +41,30 @@ REQUEST_INTERVAL = 2.0
 RISK_BACKOFF = (5, 15, 30)
 
 
+class LoginRequiredError(RuntimeError):
+    """Cookie 缺失或失效，采集必须终止
+
+    B 站对匿名请求的风控阈值很低，没有有效登录态时接口会持续返回 -352，
+    逐条退避重试既拿不到数据又白耗时间。所以统一用这个异常向上抛出，
+    由入口提示用户重新扫码，不允许静默降级成匿名请求。
+    """
+
+
 class BilibiliCrawler:
     """B站视频内容爬虫"""
 
     def __init__(self):
+        # 没有 Cookie 时直接失败，不构造匿名会话。
+        # 放在构造阶段是为了让所有入口（CLI、API、脚本）都在启动时暴露问题，
+        # 而不是跑到一半才发现每个请求都被风控。
+        if not BILIBILI_COOKIE:
+            raise LoginRequiredError(
+                "未配置 BILIBILI_COOKIE，匿名请求会被风控拦截。"
+                "请先执行 python -m app.crawler.bilibili_login 扫码登录"
+            )
         self.session = requests.Session()
         self.session.headers.update(DEFAULT_HEADERS)
-        if BILIBILI_COOKIE:
-            self.session.headers["Cookie"] = BILIBILI_COOKIE
+        self.session.headers["Cookie"] = BILIBILI_COOKIE
         self._mixin_key = None
         self._last_request_at = 0.0
 
@@ -87,26 +103,23 @@ class BilibiliCrawler:
 
     # ---------- 登录态 ----------
 
-    def check_login(self) -> bool:
+    def check_login(self) -> None:
         """
-        检查 Cookie 是否有效
+        校验登录态，无效时直接抛异常
 
-        匿名请求的风控阈值远低于登录态，Cookie 过期后仍会带上但不起作用，
-        只会在后面某次请求突然收到 -352。启动时先确认一次，问题当场暴露。
+        Cookie 过期后继续跑只会在每个接口上收到 -352，退避重试也拿不到数据。
+        这里不返回布尔值，而是直接终止，避免调用方忘记处理返回值。
         """
         try:
             data = self._get("https://api.bilibili.com/x/web-interface/nav", timeout=10).json()
         except Exception as e:
-            logger.warning(f"[bilibili] 登录状态检查失败: {e}")
-            return False
+            raise LoginRequiredError(f"登录状态检查失败，无法确认 Cookie 是否有效: {e}")
         if data.get("code") == 0 and (data.get("data") or {}).get("isLogin"):
-            return True
-        logger.warning(
-            "[bilibili] Cookie 无效或已过期（nav 返回 isLogin=False），"
-            "将以匿名身份请求，极易触发 -352 风控。"
-            "请重新登录 bilibili.com 后复制 Cookie 写入 .env 的 BILIBILI_COOKIE。"
+            return
+        raise LoginRequiredError(
+            "Cookie 已失效（nav 返回 isLogin=False）。"
+            "请执行 python -m app.crawler.bilibili_login 重新扫码登录"
         )
-        return False
 
     # ---------- wbi 签名 ----------
 
