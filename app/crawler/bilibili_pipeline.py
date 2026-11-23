@@ -33,7 +33,7 @@ from app.crawler.anomaly_detector import (
 )
 from app.db.database import Base, SessionLocal, engine
 from app.db.models import PriceHistory, Product, TranscriptSegment, VideoDigest
-from app.db.repository import save_price, save_digest, save_transcript
+from app.db.repository import get_recent_prices, save_price, save_digest, save_transcript
 from app.core.logger import logger
 
 # 视频总结输出目录
@@ -203,6 +203,14 @@ class BilibiliPipeline:
         pubdate = video.get("pubdate")
         record_date = pubdate.date() if isinstance(pubdate, datetime) else None
 
+        # 异常检测的参照价：数据库里该型号+平台在当天之前的最近一次真实价格。
+        # 不能用基准文件当参照，它是建基准那天（5 月）的快照，行情涨上去以后
+        # 每天的正常价格都会被判成"偏高"整批丢掉。
+        reference = (
+            get_recent_prices(record_date)
+            if (self.check_anomalies and record_date) else None
+        )
+
         # 2. 音频转写与抽帧互不依赖，放进线程池并行，总耗时约等于较慢的那个
         started = time.perf_counter()
         with ThreadPoolExecutor(max_workers=2) as pool:
@@ -272,11 +280,11 @@ class BilibiliPipeline:
                 if not name or not price:
                     continue
                 # 二手价和全新价分开比对，否则正常二手价会被判成"偏低异常"
-                benchmark = self.used_benchmark if condition == "used" else self.benchmark
+                catalog = self.used_benchmark if condition == "used" else self.benchmark
                 # 硬件型号是固定目录，只接受与基准表完全一致的名称。
                 # 截图漏字（4080 S 读成 4080）这类错误直接跳过，不做模糊猜测，
                 # 避免把价格串到别的型号上。
-                if name not in benchmark:
+                if name not in catalog:
                     logger.warning(
                         f"[bili-pipeline] 型号不在目录中，跳过: {name} @ {platform} = {price}"
                     )
@@ -284,8 +292,14 @@ class BilibiliPipeline:
                 # 传入视频自带的涨跌幅，让检测能区分"读错价格"和"当天真实大涨"
                 # 建基准的那一期必须跳过检测，否则新行情会被旧基准整批筛掉
                 if self.check_anomalies:
+                    # 参照价以前一条真实入库价为准（相当于"昨天卖多少"），
+                    # 只有库里完全没这个型号的历史时才退回 5 月的基准表
+                    ref_bucket = (reference or {}).get(
+                        "used" if condition == "used" else "new"
+                    ) or {}
+                    reference_prices = ref_bucket if name in ref_bucket else catalog
                     is_anomaly, reason = check_anomaly(
-                        name, platform, price, benchmark, change=p.get("change")
+                        name, platform, price, reference_prices, change=p.get("change")
                     )
                     if is_anomaly:
                         logger.info(f"[bili-pipeline] 排除异常: {name} @ {platform}={price}, {reason}")

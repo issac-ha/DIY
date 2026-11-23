@@ -6,7 +6,7 @@ import json
 import re
 from datetime import date, timedelta
 
-from sqlalchemy import and_
+from sqlalchemy import and_, func
 
 from app.db.database import SessionLocal
 from app.db.models import Product, PriceHistory, VideoDigest, TranscriptSegment
@@ -326,6 +326,56 @@ def search_news(keyword: str = "", days: int = 7) -> list:
                     "video": row.title,
                 })
         return results
+    finally:
+        db.close()
+
+
+def get_recent_prices(before_date: date) -> dict:
+    """
+    取每个型号+平台在指定日期之前最近一次入库价，用作异常检测的参照
+
+    为什么不用 benchmark_prices.json：那个文件是建基准那天（5 月）的快照，
+    半年后真实行情已经涨了几十个百分点，拿它比会把每天的正常价格全判成"偏高"。
+    数据库里的上一条价格才是"昨天卖多少"，只用来抓读错数的偶发异常。
+
+    :return: {"new": {型号: {"prices": {平台: 价格}}}, "used": {...}}
+    """
+    db = SessionLocal()
+    try:
+        # 先按 产品+平台 取最大日期，再回连价格表拿到当天的值
+        latest = (
+            db.query(
+                PriceHistory.product_id.label("product_id"),
+                PriceHistory.platform.label("platform"),
+                func.max(PriceHistory.date).label("last_date"),
+            )
+            .filter(PriceHistory.date < before_date)
+            .group_by(PriceHistory.product_id, PriceHistory.platform)
+            .subquery()
+        )
+        rows = (
+            db.query(Product.name, Product.condition, PriceHistory.platform, PriceHistory.price)
+            .select_from(PriceHistory)
+            .join(Product, Product.id == PriceHistory.product_id)
+            .join(latest, and_(
+                PriceHistory.product_id == latest.c.product_id,
+                PriceHistory.platform == latest.c.platform,
+                PriceHistory.date == latest.c.last_date,
+            ))
+            .all()
+        )
+
+        result = {"new": {}, "used": {}}
+        for name, condition, platform, price in rows:
+            if not price:
+                continue
+            bucket = result["used" if condition == "used" else "new"]
+            bucket.setdefault(name, {"prices": {}})["prices"][platform] = price
+        return result
+    except Exception as e:
+        # 参照价取不到时退回空字典，调用方会继续用基准文件，不影响采集
+        logger.warning(f"[repo] 读取历史参照价失败: {e}")
+        return {"new": {}, "used": {}}
     finally:
         db.close()
 
