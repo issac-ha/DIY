@@ -138,12 +138,15 @@ def transcribe_video(crawler, bvid: str, cid: int, audio_dir: Path) -> list:
     :param audio_dir: 音频缓存目录
     :return: 转写分段列表，失败返回空列表
     """
-    audio_url = crawler.get_audio_url(bvid, cid)
-    if not audio_url:
+    urls = crawler.get_audio_urls(bvid, cid)
+    if not urls:
         return []
 
     audio_path = Path(audio_dir) / f"{bvid}.wav"
-    if not download_audio(audio_url, audio_path):
-        return []
-
-    return transcribe(audio_path)
+    # 第一条通常是 PCDN 节点，连不上就换下一条官方源
+    for index, url in enumerate(urls, start=1):
+        if download_audio(url, audio_path):
+            return transcribe(audio_path)
+        if index < len(urls):
+            logger.warning(f"[asr] {bvid} 第 {index}/{len(urls)} 条音频地址不可用，换下一条")
+    return []

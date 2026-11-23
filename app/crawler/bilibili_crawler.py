@@ -246,11 +246,16 @@ class BilibiliCrawler:
             logger.error(f"[bilibili] 获取视频详情失败({bvid}): {e}")
         return {}
 
-    def get_audio_url(self, bvid: str, cid: int) -> str:
+    def get_audio_urls(self, bvid: str, cid: int) -> list:
         """
-        获取音频流地址（DASH audio，码率最低的一路，省流量）
+        获取音频流候选地址（DASH audio，码率最低的一路，省流量）
 
-        :return: 音频 URL，失败返回空字符串
+        每条流都带 baseUrl 和 backupUrl 两组地址。baseUrl 常指向 PCDN 节点
+        （如 edge.mountaintoys.cn:4483），部分网络连不上；backupUrl 一般是
+        upos 官方源。只取第一条会在 PCDN 不可达时整期转写失败，所以全部返回，
+        由调用方逐个尝试。
+
+        :return: 候选地址列表，失败返回空列表
         """
         try:
             resp = self._get(
@@ -261,17 +266,20 @@ class BilibiliCrawler:
             data = resp.json()
             if data.get("code") != 0:
                 logger.error(f"[bilibili] 音频地址接口错误: {data.get('message')}")
-                return ""
+                return []
             audios = (data.get("data", {}).get("dash") or {}).get("audio") or []
             if not audios:
                 logger.warning(f"[bilibili] 无 DASH 音频流({bvid})")
-                return ""
+                return []
             # 选码率最低的，语音转写够用
             audios.sort(key=lambda a: a.get("bandwidth", 0))
-            return audios[0].get("baseUrl") or audios[0].get("base_url") or ""
+            audio = audios[0]
+            urls = [audio.get("baseUrl") or audio.get("base_url")]
+            urls += audio.get("backupUrl") or audio.get("backup_url") or []
+            return [u for u in urls if u]
         except Exception as e:
             logger.error(f"[bilibili] 获取音频地址失败({bvid}): {e}")
-            return ""
+            return []
 
     def get_subtitles(self, aid: int, cid: int) -> str:
         """获取视频字幕文本（CC字幕），无字幕返回空字符串"""
@@ -462,15 +470,23 @@ class BilibiliCrawler:
 
         payload = data.get("data", {})
         dash_videos = (payload.get("dash") or {}).get("video") or []
+        candidates = []
         if dash_videos:
             # 选最接近目标清晰度的流
             dash_videos.sort(key=lambda v: abs(v.get("id", 0) - quality))
-            video_url = dash_videos[0].get("baseUrl") or dash_videos[0].get("base_url")
+            stream = dash_videos[0]
+            candidates.append(stream.get("baseUrl") or stream.get("base_url"))
+            candidates += stream.get("backupUrl") or stream.get("backup_url") or []
         else:
             durl = payload.get("durl") or []
-            video_url = durl[0].get("url") if durl else None
+            if durl:
+                candidates.append(durl[0].get("url"))
+                candidates += durl[0].get("backup_url") or []
 
-        if not video_url:
+        # baseUrl 常指向 PCDN 节点，部分网络连不上；backupUrl 是官方源。
+        # 只试第一条会在 PCDN 不可达时整期抽帧失败，所以按顺序逐个尝试
+        candidates = [u for u in candidates if u]
+        if not candidates:
             logger.error(f"[bilibili] 未取得视频流地址({bvid})")
             return []
 
@@ -487,26 +503,39 @@ class BilibiliCrawler:
             "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
             "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36\r\n"
         )
-        cmd = [
-            ffmpeg, "-y", "-loglevel", "error",
-            # B站 CDN 偶发 TLS 断连，让 ffmpeg 自己断点重连，比整段重来便宜得多
-            "-reconnect", "1",
-            "-reconnect_streamed", "1",
-            "-reconnect_delay_max", "5",
-            "-headers", headers,
-            "-i", video_url,
-        ]
+        cmd_tail = []
         if max_seconds:
-            cmd += ["-t", str(max_seconds)]
-        cmd += ["-vf", f"fps=1/{interval}", "-q:v", "3",
-                str(out_dir / "frame_%04d.jpg")]
+            cmd_tail += ["-t", str(max_seconds)]
+        cmd_tail += ["-vf", f"fps=1/{interval}", "-q:v", "3",
+                     str(out_dir / "frame_%04d.jpg")]
 
         try:
-            # 卡住时最多等 5 分钟。原来 15 分钟在网络差时会长时间静默挂起，
-            # 外层连重试的机会都没有
-            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
-            if proc.returncode != 0:
-                logger.error(f"[bilibili] ffmpeg 抽帧失败: {proc.stderr[:300]}")
+            # 逐个候选地址尝试，第一条通了就不再试后面的
+            proc = None
+            for index, url in enumerate(candidates, start=1):
+                # 上一条地址可能写出半套帧，换地址前清掉，避免帧序号和时间对不上
+                if index > 1:
+                    for old in out_dir.glob("frame_*.jpg"):
+                        old.unlink()
+                cmd = [
+                    ffmpeg, "-y", "-loglevel", "error",
+                    # B站 CDN 偶发 TLS 断连，让 ffmpeg 自己断点重连，比整段重来便宜得多
+                    "-reconnect", "1",
+                    "-reconnect_streamed", "1",
+                    "-reconnect_delay_max", "5",
+                    "-headers", headers,
+                    "-i", url,
+                ] + cmd_tail
+                # 卡住时最多等 5 分钟。原来 15 分钟在网络差时会长时间静默挂起，
+                # 外层连重试的机会都没有
+                proc = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+                if proc.returncode == 0:
+                    break
+                logger.error(
+                    f"[bilibili] ffmpeg 抽帧失败(第 {index}/{len(candidates)} 条地址): "
+                    f"{proc.stderr[:300]}"
+                )
+            if proc is None or proc.returncode != 0:
                 return []
         except subprocess.TimeoutExpired:
             logger.error(f"[bilibili] ffmpeg 抽帧超时({bvid})")
