@@ -7,6 +7,7 @@ B站视频价格采集流水线：
 4. 视觉模型分析截图 + 字幕 → 输出视频总结
 5. LLM 提取显卡价格 → 异常过滤 → 入库
 """
+import json
 import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
@@ -51,6 +52,59 @@ REAL_DAY_MIN_ROWS = 150
 # CPU 60、内存 18、硬盘 12。阈值留了余量，只在明显缺一整类时告警。
 CATEGORY_MIN_ROWS = {"gpu": 80, "cpu": 50, "memory": 12, "ssd": 8}
 CATEGORY_NAMES = {"gpu": "显卡", "cpu": "CPU", "memory": "内存", "ssd": "硬盘"}
+
+# 已知缺口清单：记录反复采集仍不完整的日期，避免每轮都把同一批日期重跑一遍。
+# 存在 app/data 下的 JSON 里而不是数据库，是因为它属于采集过程中的运行状态，
+# 不进业务数据，也不该被 API 查询到。
+KNOWN_GAPS_FILE = Path(__file__).resolve().parents[1] / "data" / "known_gaps.json"
+# 同一天连续失败达到这个次数后判定为已知缺口
+MAX_GAP_ATTEMPTS = 3
+
+
+def load_known_gaps() -> dict:
+    """读取缺口清单，格式 {日期: {attempts, reason, last_try, confirmed}}"""
+    if not KNOWN_GAPS_FILE.exists():
+        return {}
+    try:
+        return json.loads(KNOWN_GAPS_FILE.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        # 文件损坏时按空处理，不能让排障数据反过来阻塞采集
+        logger.warning(f"[bili-pipeline] 缺口清单读取失败，按空处理: {KNOWN_GAPS_FILE}")
+        return {}
+
+
+def _save_known_gaps(gaps: dict) -> None:
+    KNOWN_GAPS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    KNOWN_GAPS_FILE.write_text(
+        json.dumps(gaps, ensure_ascii=True, indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
+
+
+def record_gap_attempt(day: str, reason: str) -> dict:
+    """
+    记录某天一次采集不完整
+
+    :param day: 日期字符串 yyyy-MM-dd
+    :param reason: 不完整的原因，用于事后核对
+    :return: 更新后的记录，confirmed 表示已达阈值
+    """
+    gaps = load_known_gaps()
+    item = gaps.setdefault(day, {"attempts": 0})
+    item["attempts"] = int(item.get("attempts", 0)) + 1
+    item["reason"] = reason
+    item["last_try"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    item["confirmed"] = item["attempts"] >= MAX_GAP_ATTEMPTS
+    _save_known_gaps(gaps)
+    return item
+
+
+def clear_gap(day: str) -> None:
+    """某天补齐后从缺口清单移除，避免残留记录让它以后被误跳过"""
+    gaps = load_known_gaps()
+    if gaps.pop(day, None) is not None:
+        _save_known_gaps(gaps)
+
 
 
 def check_day_coverage(day) -> list:
@@ -356,7 +410,8 @@ class BilibiliPipeline:
 
     def run_range(self, start_date: datetime, end_date: datetime = None,
                   uid: str = None, max_videos: int = None,
-                  skip_existing: bool = True) -> list:
+                  skip_existing: bool = True,
+                  retry_gaps: bool = False) -> list:
         """
         按发布日期从旧到新逐期采集，用于补齐历史数据
 
@@ -367,6 +422,7 @@ class BilibiliPipeline:
         :param end_date: 结束日期（含当天），不传则到今天
         :param max_videos: 最多处理多少期，不传则区间内全部
         :param skip_existing: 跳过价格历史里已有数据的日期
+        :param retry_gaps: 忽略已知缺口清单，重新尝试之前多次失败的日期
         """
         if uid is None:
             uid = HARDWARE_UPLOADERS["芝士华莱士"]
@@ -382,6 +438,12 @@ class BilibiliPipeline:
             and start_date.date() <= v["pubdate"].date() <= end_date.date()
         ]
         videos.sort(key=lambda v: v["pubdate"])
+
+        # 已达重试上限的日期不再消耗视觉模型调用，只在结尾汇总告警
+        known_gaps = load_known_gaps()
+        confirmed_gaps = {
+            day: info for day, info in known_gaps.items() if info.get("confirmed")
+        }
 
         if skip_existing:
             db = SessionLocal()
@@ -405,14 +467,16 @@ class BilibiliPipeline:
             existing = set()
             partial = []
             for day, counts in by_day.items():
-                # 占位数据不算"已采过"，否则真实视频永远补不进来
-                if sum(counts.values()) < REAL_DAY_MIN_ROWS:
-                    continue
+                total = sum(counts.values())
                 problems = [
                     f"{CATEGORY_NAMES[category]} {counts.get(category, 0)}/{minimum}"
                     for category, minimum in CATEGORY_MIN_ROWS.items()
                     if counts.get(category, 0) < minimum
                 ]
+                # 条数明显偏少时单独标记：可能是 seed 占位数据，也可能是采集中断。
+                # 之前这里直接 continue，导致这类日期既不跳过也不告警，每轮都被重采
+                if total < REAL_DAY_MIN_ROWS:
+                    problems.insert(0, f"总条数 {total}/{REAL_DAY_MIN_ROWS}")
                 if problems:
                     partial.append((day, problems))
                 else:
@@ -427,6 +491,29 @@ class BilibiliPipeline:
                                for day, problems in sorted(partial))
                 )
             videos = [v for v in videos if v["pubdate"].date() not in existing]
+
+        # 已知缺口不再重采。这类日期通常是视频本身缺某个品类（如没有 CPU 表），
+        # 重跑多少次结果都一样，继续跑只是白烧视觉模型调用
+        if confirmed_gaps and not retry_gaps:
+            in_range = [
+                v for v in videos
+                if v["pubdate"].strftime("%Y-%m-%d") in confirmed_gaps
+            ]
+            videos = [
+                v for v in videos
+                if v["pubdate"].strftime("%Y-%m-%d") not in confirmed_gaps
+            ]
+            if in_range:
+                skipped_days = sorted({v["pubdate"].strftime("%Y-%m-%d") for v in in_range})
+                logger.warning(
+                    f"[bili-pipeline] 跳过 {len(skipped_days)} 个已知缺口日期"
+                    f"（已重试满 {MAX_GAP_ATTEMPTS} 次），如需强制重试加 --retry-gaps"
+                )
+                for day in skipped_days:
+                    logger.warning(
+                        f"[bili-pipeline]   已知缺口 {day}: "
+                        f"{confirmed_gaps[day].get('reason', '原因未记录')}"
+                    )
 
         if max_videos:
             videos = videos[:max_videos]
@@ -455,12 +542,27 @@ class BilibiliPipeline:
                 logger.warning(f"[bili-pipeline] {day} 全部视频无有效价格数据，跳过该天")
                 for r in day_results:
                     r["skipped"] = True
+                item = record_gap_attempt(day, "整期无有效价格数据")
+                if item["confirmed"]:
+                    logger.warning(
+                        f"[bili-pipeline] {day} 已连续 {item['attempts']} 次无数据，"
+                        "记为已知缺口，后续采集自动跳过"
+                    )
             else:
                 # 当天入库成功才滚动基准，失败的一天不能污染下一天的参照
                 self._roll_benchmark([p for r in day_results for p in r.get("prices", [])])
                 problems = check_day_coverage(datetime.strptime(day, "%Y-%m-%d").date())
                 if problems:
                     logger.warning(f"[bili-pipeline] {day} 品类不全: {', '.join(problems)}")
+                    item = record_gap_attempt(day, ", ".join(problems))
+                    if item["confirmed"]:
+                        logger.warning(
+                            f"[bili-pipeline] {day} 已连续 {item['attempts']} 次品类不全，"
+                            "记为已知缺口，后续采集自动跳过"
+                        )
+                else:
+                    # 补齐后清掉历史记录，否则它会一直被当成待补日期
+                    clear_gap(day)
             results.extend(day_results)
 
         processed_days = {r["pubdate"].date() for r in results if r.get("pubdate")}
@@ -635,6 +737,8 @@ def main() -> None:
                         help="区间采集结束日期（含当天），默认今天")
     parser.add_argument("--include-existing", action="store_true",
                         help="区间模式不跳过已入库日期（默认跳过，便于中断续跑）")
+    parser.add_argument("--retry-gaps", action="store_true",
+                        help=f"忽略已知缺口清单，重新尝试之前失败满 {MAX_GAP_ATTEMPTS} 次的日期")
     parser.add_argument("--bootstrap-benchmark", action="store_true",
                         help="把本期提取的价格写成新基准表（自动关闭异常过滤）")
     parser.add_argument("--no-asr", action="store_true",
@@ -674,6 +778,7 @@ def main() -> None:
             start_date=start, end_date=end, uid=args.uid,
             max_videos=max_videos,
             skip_existing=not args.include_existing and not args.bootstrap_benchmark,
+            retry_gaps=args.retry_gaps,
         )
     else:
         results = pipeline.run(uid=args.uid, max_videos=args.videos or 3,

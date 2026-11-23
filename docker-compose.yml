@@ -53,6 +53,8 @@ services:
       - ./snapshots:/app/snapshots
       - ./reports:/app/reports
       - ./audio:/app/audio
+      # 已知缺口清单是采集的跨轮次状态，只有挂出来才能在 run --rm 的临时容器之间保留
+      - ./app/data:/app/app/data
       # faster-whisper 首次运行会下载模型，缓存下来避免每次重建都重下
       - whisper_cache:/root/.cache/huggingface
 
