@@ -10,7 +10,7 @@ B站视频价格采集流水线：
 import json
 import time
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from sqlalchemy import func
@@ -733,6 +733,8 @@ def main() -> None:
     parser.add_argument("--before", default=None, help="只处理此日期之前的视频，格式 2026-01-01")
     parser.add_argument("--from", dest="from_date", default=None,
                         help="区间采集起始日期，格式 2026-05-01，按时间从旧到新跑")
+    parser.add_argument("--recent", type=int, default=None,
+                        help="日常用：只扫最近 N 天，自动跳过已入库和已知缺口，例如 --recent 3")
     parser.add_argument("--to", dest="to_date", default=None,
                         help="区间采集结束日期（含当天），默认今天")
     parser.add_argument("--include-existing", action="store_true",
@@ -753,6 +755,17 @@ def main() -> None:
     before = _parse_day(args.before)
     start = _parse_day(args.from_date)
     end = _parse_day(args.to_date)
+
+    if args.recent:
+        # 日常增量采集：只把窗口内还没入库的日期补齐。
+        # 窗口给宽一点没有代价，已有数据的日期会被跳过
+        if start:
+            parser.error("--recent 和 --from 不能同时使用")
+        if args.bootstrap_benchmark:
+            parser.error("--recent 不能配合 --bootstrap-benchmark 使用")
+        end = end or datetime.now()
+        start = end - timedelta(days=args.recent)
+
     if args.bootstrap_benchmark and not start:
         parser.error("--bootstrap-benchmark 需要配合 --from 指定基准日期")
 
