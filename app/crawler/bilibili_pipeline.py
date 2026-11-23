@@ -24,7 +24,7 @@ from app.crawler.bilibili_crawler import (
 from app.crawler.audio_transcriber import transcribe, transcribe_video, segments_to_text
 from app.crawler.bilibili_price_extractor import extract_prices
 from app.crawler.digest_extractor import extract_digest
-from app.crawler.video_summarizer import summarize_video
+from app.crawler.video_summarizer import VisionServiceError, summarize_video
 from app.crawler.anomaly_detector import (
     load_benchmark,
     load_used_benchmark,
@@ -239,6 +239,9 @@ class BilibiliPipeline:
             summary_data = summarize_video(title, text_for_summary, snapshots)
             result["summary"] = summary_data["summary"]
             result["visual"] = summary_data["visual"]
+        except VisionServiceError:
+            # 服务级故障必须冒泡：吞掉会让这一期被当成「没有价格表」记进缺口清单
+            raise
         except Exception as e:
             logger.error(f"[bili-pipeline] 视频总结失败({bvid}): {e}")
             result["error"] = f"总结失败: {e}"
@@ -542,12 +545,21 @@ class BilibiliPipeline:
                 logger.warning(f"[bili-pipeline] {day} 全部视频无有效价格数据，跳过该天")
                 for r in day_results:
                     r["skipped"] = True
-                item = record_gap_attempt(day, "整期无有效价格数据")
-                if item["confirmed"]:
+                if all(r.get("error") for r in day_results):
+                    # 所有视频都跑失败了（CDN 连不上、抽帧失败等），属于采集环境问题。
+                    # 这种失败重试几次可能就好了，记成缺口会让这一天在若干轮后被永久跳过，
+                    # 所以只告警不计数，留待下次采集重试
                     logger.warning(
-                        f"[bili-pipeline] {day} 已连续 {item['attempts']} 次无数据，"
-                        "记为已知缺口，后续采集自动跳过"
+                        f"[bili-pipeline] {day} 失败原因是采集环境，未计入缺口清单: "
+                        f"{day_results[0].get('error')}"
                     )
+                else:
+                    item = record_gap_attempt(day, "整期无有效价格数据")
+                    if item["confirmed"]:
+                        logger.warning(
+                            f"[bili-pipeline] {day} 已连续 {item['attempts']} 次无数据，"
+                            "记为已知缺口，后续采集自动跳过"
+                        )
             else:
                 # 当天入库成功才滚动基准，失败的一天不能污染下一天的参照
                 self._roll_benchmark([p for r in day_results for p in r.get("prices", [])])
@@ -817,4 +829,10 @@ if __name__ == "__main__":
     except LoginRequiredError as exc:
         # 登录问题不是程序缺陷，用简洁提示代替 traceback，方便直接照做
         print(f"\n[登录失败] {exc}")
+        raise SystemExit(1)
+    except VisionServiceError as exc:
+        # 欠费、鉴权这类问题重跑不会成功。明确提示并说明未写入缺口，
+        # 避免用户以为要补数据，也避免这几天被误标成「视频本身没价格」
+        print(f"\n[视觉模型不可用] {exc}")
+        print("本次采集中止，相关日期未记入缺口清单。充值或修复密钥后重新运行即可。")
         raise SystemExit(1)

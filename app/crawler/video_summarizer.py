@@ -22,6 +22,40 @@ BATCH_SIZE = 2
 # 单批输出的字数上限。超过 95% 视为可能截断，触发逐帧重读
 MAX_OUTPUT_CHARS = 2500
 
+
+class VisionServiceError(RuntimeError):
+    """视觉模型服务不可用：欠费、鉴权失败、限流等
+
+    这类错误和「这一期视频没有价格表」性质完全不同。前者重试多少次都不会成功，
+    把它当成数据缺口记录下来会让日期被永久跳过，所以必须向上抛出并中止采集。
+    """
+
+
+# 命中这些关键词说明是账号或配额问题，不是单次请求的偶发失败
+_SERVICE_UNAVAILABLE_KEYWORDS = (
+    "overdue balance",
+    "insufficient balance",
+    "quota",
+    "invalid api key",
+    "incorrect api key",
+    "unauthorized",
+    "authentication",
+)
+
+
+def _is_service_unavailable(err: Exception) -> bool:
+    """判断异常是否属于服务级不可用，而不是可重试的单次失败"""
+    status = getattr(err, "status_code", None)
+    if status is None:
+        response = getattr(err, "response", None)
+        status = getattr(response, "status_code", None)
+    if status in (401, 402, 403, 429):
+        return True
+
+    message = str(err).lower()
+    return any(keyword in message for keyword in _SERVICE_UNAVAILABLE_KEYWORDS)
+
+
 # 单批截图的分析 prompt
 FRAME_PROMPT = """这些是同一个硬件资讯视频的连续截图（按时间顺序）。
 
@@ -141,6 +175,11 @@ def analyze_snapshots(snapshots: list) -> str:
                 descriptions.append(f"[截图时间 {times} 秒]\n{desc}")
             logger.info(f"[vision] 分析第 {batch_no} 批截图完成")
         except Exception as e:
+            # 欠费、密钥失效这类问题继续跑没有意义，直接中止整轮采集
+            if _is_service_unavailable(e):
+                raise VisionServiceError(
+                    f"视觉模型不可用（账号欠费或配额不足），采集中止: {e}"
+                ) from e
             logger.error(f"[vision] 分析截图失败: {e}")
             times = ", ".join(str(s["time"]) for s in batch)
             descriptions.append(f"[截图时间 {times} 秒] 分析失败: {e}")
@@ -172,6 +211,10 @@ def summarize_video(title: str, subtitle: str, snapshots: list) -> dict:
             resp = llm.invoke(prompt)
             summary = resp.content.strip()
         except Exception as e:
+            if _is_service_unavailable(e):
+                raise VisionServiceError(
+                    f"视觉模型不可用（账号欠费或配额不足），采集中止: {e}"
+                ) from e
             logger.error(f"[vision] 生成总结失败: {e}")
             summary = f"总结生成失败: {e}"
 
