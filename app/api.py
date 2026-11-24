@@ -9,11 +9,13 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from sqlalchemy import func
 
-from app.agent.hardware_agent import agent
+from app.agent.hardware_agent import build_agent
 from app.config import API_KEY
+from app.core.logger import logger
 from app.db import repository
 from app.db.database import SessionLocal
 from app.db.models import Product, PriceHistory
+from app.harness import AgentHarness, LLMUnavailableError
 
 app = FastAPI(title="DIY Agent - 硬件价格分析")
 
@@ -59,6 +61,8 @@ class ChatRequest(BaseModel):
     """
     message: str = ""
     messages: list[ChatMessage] = Field(default_factory=list)
+    # 可选,前端传了就能在日志里按会话串起整轮工具调用;不传也不影响功能
+    session_id: str = ""
 
 
 class ChatResponse(BaseModel):
@@ -68,6 +72,9 @@ class ChatResponse(BaseModel):
 
 # 只带最近若干轮，避免上下文无限增长推高 token 成本
 MAX_CHAT_MESSAGES = 20
+
+# 运行时外壳:超时、重试、工具链日志、模型不可用降级都在这里,接口本身只管收参和返回
+harness = AgentHarness(build_agent, timeout=90, max_retries=1)
 
 
 @app.post("/chat", response_model=ChatResponse, dependencies=[Depends(verify_api_key)])
@@ -87,9 +94,13 @@ def chat(request: ChatRequest):
     if not history:
         raise HTTPException(status_code=400, detail="消息不能为空")
 
-    result = agent.invoke({"messages": history})
-    reply = result["messages"][-1].content
-    return ChatResponse(reply=reply)
+    try:
+        result = harness.run(history, session_id=request.session_id or "-")
+    except LLMUnavailableError as exc:
+        # 模型侧故障不把 traceback 暴露给前端,由外壳记日志,前端只拿到可重试的提示
+        logger.error(f"[chat] 模型服务不可用: {exc}")
+        raise HTTPException(status_code=503, detail="模型服务暂不可用，请稍后重试")
+    return ChatResponse(reply=result.reply)
 
 
 @app.get("/api/trend")
