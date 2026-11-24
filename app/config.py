@@ -23,3 +23,7 @@ API_KEY = os.getenv("API_KEY", "")
 VISION_BASE_URL = os.getenv("VISION_BASE_URL", "https://ark.cn-beijing.volces.com/api/v3")
 VISION_MODEL = os.getenv("VISION_MODEL", "doubao-seed-2-1-lite-260915")
 VISION_API_KEY = os.getenv("VISION_API_KEY", "")
+
+# Redis 缓存地址。默认留空表示不启用，所有接口直接查库。
+# 缓存只是加速手段，不是必需组件：本地开发、CI 测试都不该被它卡住
+REDIS_URL = os.getenv("REDIS_URL", "")

@@ -30,6 +30,21 @@ services:
       # MySQL 8 首次初始化数据目录需要几十秒，这段时间内的失败不算异常
       start_period: 40s
 
+  redis:
+    image: redis:7-alpine
+    container_name: diy-redis
+    restart: unless-stopped
+    # 缓存的副本丢了可以从 MySQL 重建，关掉 RDB/AOF 持久化：
+    # 省磁盘，也避免快照 fork 阻塞主线程影响响应延迟
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    ports:
+      # 只绑回环地址，本机直接用 python 跑时才能连上
+      - "127.0.0.1:6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
   app:
     build: .
     container_name: diy-agent
@@ -43,6 +58,8 @@ services:
       # 覆盖 .env 里的 127.0.0.1，容器内要连 compose 网络里的 mysql 服务
       DATABASE_URL: mysql+pymysql://diy:${MYSQL_PASSWORD}@mysql:3306/diy_agent?charset=utf8mb4
       TZ: Asia/Shanghai
+      # 容器内走 compose 网络，用服务名而不是 127.0.0.1
+      REDIS_URL: redis://redis:6379/0
     ports:
       # 只绑回环地址，局域网内其他设备访问不到。
       # 对外暴露时改成 "8000:8000"，并在 .env 里配置 API_KEY

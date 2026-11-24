@@ -11,6 +11,7 @@ from sqlalchemy import func
 
 from app.agent.hardware_agent import build_agent
 from app.config import API_KEY
+from app.core.cache import cache_get, cache_set
 from app.core.logger import logger
 from app.db import repository
 from app.db.database import SessionLocal
@@ -110,6 +111,12 @@ def get_trend(name: str, days: int = 7, condition: str = "new"):
 
     condition: new 全新（默认）/ used 二手。不传全新，否则闲鱼二手价会串进比价曲线
     """
+    # 走势的输入只有型号、天数、成色三个参数，key 拼全后可直接复用
+    cache_key = f"trend:{name}:{days}:{condition}"
+    cached = cache_get(cache_key)
+    if cached is not None:
+        return cached
+
     db = SessionLocal()
     try:
         # 先按完整型号名匹配。前端点表格行传的是标准名，
@@ -165,12 +172,15 @@ def get_trend(name: str, days: int = 7, condition: str = "new"):
             day_prices = [m[d] for m in by_platform.values() if d in m]
             lowest.append(min(day_prices) if day_prices else None)
 
-        return {
+        result = {
             "name": products[0].name,
             "dates": all_dates,
             "prices": lowest,
             "series": series,
         }
+        # 走势里最新一天还会变，TTL 不宜太长
+        cache_set(cache_key, result, ttl=300)
+        return result
     finally:
         db.close()
 
@@ -259,6 +269,12 @@ def list_prices(day: str = "", category: str = "", condition: str = "new"):
         if target is None:
             return {"date": None, "platforms": [], "products": []}
 
+        # 日期、品类、成色共同决定结果，少拼一个就会把二手价当全新价返回
+        cache_key = f"prices:{target.isoformat()}:{category or 'all'}:{condition}"
+        cached = cache_get(cache_key)
+        if cached is not None:
+            return cached
+
         query = (
             db.query(PriceHistory, Product)
             .join(Product, PriceHistory.product_id == Product.id)
@@ -308,13 +324,17 @@ def list_prices(day: str = "", category: str = "", condition: str = "new"):
 
         # 平台列顺序固定，前端切换日期时列不会跳来跳去
         order = ["jd", "taobao", "pdd", "douyin", "xianyu"]
-        return {
+        result = {
             "date": target.isoformat(),
             "category": category,
             "condition": condition,
             "platforms": [p for p in order if p in platforms],
             "products": results,
         }
+        # 历史日期采集后不再变化，缓存久一点；当天可能还在写入，短 TTL 兜底
+        ttl = 3600 if target < datetime.now().date() else 60
+        cache_set(cache_key, result, ttl=ttl)
+        return result
     finally:
         db.close()
 
@@ -329,15 +349,23 @@ def get_digest_api(day: str = ""):
         except ValueError:
             return {"error": f"日期格式不对：{day}，应为 YYYY-MM-DD"}
 
+    cache_key = f"digest:{day or 'latest'}"
+    cached = cache_get(cache_key)
+    if cached is not None:
+        return cached
+
     digest = repository.get_digest(target)
     if not digest:
+        # 空结果不缓存：可能是当天还没采到，缓存住会挡住重采后的数据
         return {}
-    return {
+    result = {
         "date": digest["date"].isoformat(),
         "title": digest["title"],
         "market_summary": digest["market_summary"],
         "news": digest["news"],
     }
+    cache_set(cache_key, result, ttl=300)
+    return result
 
 
 @app.get("/api/news")
