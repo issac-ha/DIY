@@ -103,6 +103,10 @@
         .ov-sub { margin-top: 4px; font-size: 12px; color: var(--muted); }
         .ov-up { color: var(--up); }
         .ov-down { color: var(--down); }
+
+        /* 可排序表头：手型光标，当前排序列有箭头提示 */
+        th.sortable { cursor: pointer; user-select: none; white-space: nowrap; }
+        th.sortable:hover { color: var(--accent); }
         @media (max-width: 900px) {
             .overview { grid-template-columns: 1fr; }
         }
@@ -286,10 +290,14 @@
             category: "gpu",
             condition: "new",
             selected: "",
-            days: 7
+            days: 7,
+            // 表头排序：key 为空表示保持接口返回顺序，dir 为 1 升序、-1 降序
+            sort: { key: "", dir: 1 }
         };
 
         let chart = null;
+        // 最近一次比价接口结果，点击表头排序时复用，避免重复请求
+        let lastPriceData = null;
 
         async function fetchJSON(url) {
             const resp = await fetch(url);
@@ -308,6 +316,36 @@
         function fmtPrice(value) {
             if (value === null || value === undefined) return "—";
             return Number(value).toLocaleString("zh-CN");
+        }
+
+        // 表头排序：同一列再点一次反向，未选择时保持接口原顺序
+        function sortProducts(products) {
+            const { key, dir } = state.sort;
+            if (!key) return products;
+            return [...products].sort((a, b) => {
+                if (key === "name") {
+                    return a.name.localeCompare(b.name, "zh-CN") * dir;
+                }
+                return (Number(a[key] || 0) - Number(b[key] || 0)) * dir;
+            });
+        }
+
+        // 涨跌百分比按昨价现算。后端 change_pct 恒为 0，不能直接展示
+        function changePct(product) {
+            const price = Number(product.lowest_price || 0);
+            const change = Number(product.lowest_change || 0);
+            const yesterday = price - change;
+            if (!yesterday) return null;
+            return change / yesterday * 100;
+        }
+
+        function pctHTML(product) {
+            const pct = changePct(product);
+            if (pct === null) return '<span class="muted">—</span>';
+            // 小于 0.05% 的波动按持平显示，避免出现 +0.0% 这种噪声
+            if (Math.abs(pct) < 0.05) return '<span class="muted">持平</span>';
+            return `<span class="delta ${pct > 0 ? "up" : "down"}">`
+                + `${pct > 0 ? "+" : ""}${pct.toFixed(1)}%</span>`;
         }
 
         // 涨跌用箭头加数字，颜色沿用红涨绿跌
@@ -400,8 +438,8 @@
             const thead = document.querySelector("#priceTable thead");
             const tbody = document.querySelector("#priceTable tbody");
             const empty = document.getElementById("tableEmpty");
-            const products = data.products || [];
             const platforms = data.platforms || [];
+            const products = sortProducts(data.products || []);
 
             document.getElementById("tableHint").textContent = data.date
                 ? `${data.date} · ${products.length} 个型号`
@@ -421,10 +459,17 @@
             empty.hidden = true;
             renderOverview(data);
 
-            const heads = ["型号", ...platforms.map(p => PLATFORM_NAMES[p] || p), "最低价"];
-            thead.innerHTML = "<tr>" + heads.map((h, i) =>
-                `<th class="${i === 0 ? "name-col" : ""}">${h}</th>`
-            ).join("") + "</tr>";
+            const heads = ["型号", ...platforms.map(p => PLATFORM_NAMES[p] || p), "最低价", "涨跌幅"];
+            // 只有这三列可排序，平台价格列不支持，避免误点
+            const sortKeys = { "型号": "name", "最低价": "lowest_price", "涨跌幅": "lowest_change" };
+            thead.innerHTML = "<tr>" + heads.map((h, i) => {
+                const key = sortKeys[h];
+                const cls = [i === 0 ? "name-col" : "", key ? "sortable" : ""].filter(Boolean).join(" ");
+                const mark = state.sort.key === key ? (state.sort.dir > 0 ? " ↑" : " ↓") : "";
+                return key
+                    ? `<th class="${cls}" data-sort="${key}">${h}${mark}</th>`
+                    : `<th class="${cls}">${h}</th>`;
+            }).join("") + "</tr>";
 
             tbody.innerHTML = products.map(product => {
                 const cells = platforms.map(platform => {
@@ -453,6 +498,7 @@
                         <div class="price">${fmtPrice(product.lowest_price)}</div>
                         <div class="sub">${PLATFORM_NAMES[product.lowest_platform] || product.lowest_platform}</div>
                     </td>
+                    <td>${pctHTML(product)}</td>
                 </tr>`;
             }).join("");
 
@@ -461,6 +507,27 @@
                 const tr = event.target.closest("tr[data-name]");
                 if (tr) selectProduct(tr.dataset.name);
             };
+
+            // 表头排序复用最近一次接口结果，不重新请求
+            thead.onclick = (event) => {
+                const th = event.target.closest("th[data-sort]");
+                if (!th || !lastPriceData) return;
+                const key = th.dataset.sort;
+                if (state.sort.key === key) {
+                    state.sort.dir = -state.sort.dir;
+                } else {
+                    // 名称默认升序，价格类默认降序，符合看行情的习惯
+                    state.sort = { key, dir: key === "name" ? 1 : -1 };
+                }
+                renderTable(lastPriceData);
+            };
+
+            // 重排会重建行，把当前选中型号的高亮补回来，图表和表格保持一致
+            if (state.selected) {
+                document.querySelectorAll("#priceTable tbody tr").forEach(tr => {
+                    tr.classList.toggle("active", tr.dataset.name === state.selected);
+                });
+            }
         }
 
         function resetChart() {
@@ -581,6 +648,7 @@
                 const url = `/api/prices?day=${state.date}&category=${state.category}`
                     + `&condition=${state.condition}`;
                 const data = await fetchJSON(url);
+                lastPriceData = data;
                 renderTable(data);
 
                 // 默认选中第一行，页面一打开就有走势图，不用先点
