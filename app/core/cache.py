@@ -102,3 +102,19 @@ def cache_delete_prefix(prefix: str) -> int:
     except Exception as e:
         logger.warning(f"[cache] 清理失败 {prefix}: {e}")
         return 0
+
+
+# 只读接口用到的 key 前缀。采集写库后统一清理，避免看板在 TTL 内读到旧数据
+REPORT_CACHE_PREFIXES = ("prices:", "trend:", "digest:")
+
+
+def invalidate_report_cache() -> int:
+    """采集结束后清理行情相关缓存，返回删除的 key 数量
+
+    前缀集中定义在这里而不是散落在各调用点：以后新增缓存接口只要补一个前缀，
+    清理逻辑不用改。缓存不可用时底层会降级，这里返回 0，不影响采集流程。
+    """
+    removed = 0
+    for prefix in REPORT_CACHE_PREFIXES:
+        removed += cache_delete_prefix(prefix)
+    return removed

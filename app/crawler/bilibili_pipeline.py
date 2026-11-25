@@ -25,6 +25,7 @@ from app.crawler.audio_transcriber import transcribe, transcribe_video, segments
 from app.crawler.bilibili_price_extractor import extract_prices
 from app.crawler.digest_extractor import extract_digest
 from app.crawler.video_summarizer import VisionServiceError, summarize_video
+from app.core.cache import invalidate_report_cache
 from app.crawler.anomaly_detector import (
     load_benchmark,
     load_used_benchmark,
@@ -835,6 +836,12 @@ def main() -> None:
     for r in results:
         print(f"  - {r['title'][:40]} | 价格 {len(r['prices'])} 条 | "
               f"{'失败: ' + r['error'] if r.get('error') else '成功'}")
+
+    # 采集改了价格和历史摘要，清掉只读接口的缓存，避免看板在 TTL 内返回旧数据。
+    # 缓存不可用时清理函数自己返回 0，不影响采集结果
+    removed = invalidate_report_cache()
+    if removed:
+        print(f"已清理行情缓存 {removed} 个 key")
 
 
 if __name__ == "__main__":
