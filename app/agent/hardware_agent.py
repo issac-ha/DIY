@@ -6,6 +6,8 @@ Hardware Agent
 这里只负责"怎么组装",不负责"怎么跑"。超时、重试、日志、降级都在 app/harness 里,
 两件事分开之后,换模型或换工具不影响运行时逻辑,改运行时也不用动提示词。
 """
+from datetime import date
+
 from langchain.agents import create_agent
 
 from app.llm_client import get_llm
@@ -42,8 +44,15 @@ SYSTEM_PROMPT = (
 
 def build_agent():
     """构建 Agent。由 harness 懒加载,进程内只构建一次"""
+    # 模型无法可靠得知"今天"是哪天,不注入就会把 2026 年的数据说成 2025 年。
+    # 日期在构建时固定,跨天需重启服务;演示和日常使用足够。
+    system_prompt = (
+        SYSTEM_PROMPT
+        + f"\n\n当前日期：{date.today().isoformat()}。"
+        "涉及年份或'最近/今年'的判断以此为准；引用数据日期时照抄查询结果，不要改写年份。"
+    )
     return create_agent(
         model=get_llm(),
         tools=TOOLS,
-        system_prompt=SYSTEM_PROMPT,
+        system_prompt=system_prompt,
     )
