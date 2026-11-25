@@ -252,6 +252,8 @@
                     <div class="tabs small" id="daysTabs">
                         <button data-days="7" class="active">7 天</button>
                         <button data-days="30">30 天</button>
+                        <!-- 9999 天等价于取全部历史，数据增长后不用再改这个值 -->
+                        <button data-days="9999">全部</button>
                     </div>
                 </div>
                 <div id="chart"></div>
@@ -568,8 +570,9 @@
             const dom = document.getElementById("chart");
             if (!chart) chart = echarts.init(dom);
             document.getElementById("chartEmpty").hidden = true;
+            const rangeLabel = state.days >= 9999 ? "全部历史" : `近 ${state.days} 天`;
             document.getElementById("chartTitle").textContent =
-                `${data.name} · 近 ${state.days} 天价格走势`;
+                `${data.name} · ${rangeLabel}价格走势`;
 
             // 每个平台一条线，某天没有数据就断开，不要连成假曲线
             const series = (data.series || [])
